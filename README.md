@@ -36,8 +36,8 @@ no cambia la imagen que se despliega. Los nombres `hiss-dev`, `hiss-staging` y
 
 ### Credencial de Postgres
 
-`POSTGRES_PASSWORD` **nunca se commitea (never committed)** ni aparece en los
-archivos de Environment. En local, inyéctala desde el entorno del proceso y despliega desde
+`POSTGRES_PASSWORD` **nunca se versiona** ni aparece en los archivos de
+Environment. En local, inyéctala desde el entorno del proceso y despliega desde
 la raíz del repositorio:
 
 ```sh

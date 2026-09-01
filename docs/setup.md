@@ -1,54 +1,61 @@
-# Repository setup
+# Configuración del repositorio
 
-## Continuous integration
+## Integración continua
 
-The repository has one GitHub Actions workflow, `.github/workflows/ci.yml`. It
-runs for pull requests and for pushes to `main`. Every job uses GitHub-hosted
-`ubuntu-latest` runners. A normal full run should complete in roughly under
-three minutes; if it grows past that, treat it as a regression — a slow
-pipeline is a bad teaching artifact.
+El repositorio tiene un único workflow de GitHub Actions,
+`.github/workflows/ci.yml`. Se ejecuta en las pull requests y en los pushes a
+`main`. Todos los jobs usan runners hospedados por GitHub (`ubuntu-latest`).
+Una ejecución completa normal debería terminar en menos de tres minutos; si
+tarda más, trátalo como una regresión — un pipeline lento es un mal artefacto
+docente.
 
-The workflow first detects changed areas, then runs the relevant checks:
+El workflow detecta primero las áreas modificadas y después ejecuta sólo las
+comprobaciones relevantes:
 
-- Python linting uses Ruff 0.9.10 (`ruff check app cli` and
+- El lint de Python usa Ruff 0.9.10 (`ruff check app cli` y
   `ruff format --check app cli`).
-- `lint-docker` runs Hadolint against `app/Dockerfile`.
-- `test-app` applies the Alembic migrations and runs the Flask tests against an
-  ephemeral `postgres:17-alpine` service container.
-- `test-cli` runs the CLI tests without a service container.
-- `build` runs `docker build -f app/Dockerfile app/` after the app tests. It
-  validates the image only: it does not log in to a registry, push an image, or
-  deploy anything.
+- `lint-docker` ejecuta Hadolint contra `app/Dockerfile`.
+- `test-app` aplica las migraciones de Alembic y ejecuta los tests de Flask
+  contra un contenedor de servicio efímero `postgres:17-alpine`.
+- `test-cli` ejecuta los tests del CLI sin contenedor de servicio.
+- `build` ejecuta `docker build -f app/Dockerfile app/` después de los tests de
+  la aplicación. Sólo valida la imagen: no hace login en ningún registro, no
+  publica ninguna imagen ni despliega nada.
 
-The `changes` job uses path filters. An app change runs the app checks and an
-app image build; a CLI-only change runs the Python lint and CLI tests but skips
-app tests, Dockerfile lint, and the image build. Changes to shared files such
-as `pytest.ini`, `ruff.toml`, or the workflow run both test suites. A docs-only
-change can leave package jobs skipped; GitHub reports skipped required jobs as
-successful, so this does not bypass a failing check on a relevant change.
+El job `changes` usa filtros de rutas. Un cambio en la aplicación ejecuta sus
+comprobaciones y la construcción de la imagen; un cambio sólo en el CLI ejecuta
+el lint de Python y los tests del CLI, pero se salta los tests de la
+aplicación, el lint del Dockerfile y la construcción de la imagen. Los cambios
+en archivos compartidos como `pytest.ini`, `ruff.toml` o el propio workflow
+ejecutan ambas suites de tests. Un cambio que sólo toca documentación puede
+dejar jobs de paquetes saltados; GitHub informa de los jobs requeridos
+saltados como exitosos, así que esto no elude una comprobación fallida en un
+cambio relevante.
 
-## Protecting `main`
+## Proteger `main`
 
-Branch protection is intentionally a manual GitHub repository setting, not
-another automation step. After the first workflow run makes the checks
-available:
+La protección de rama es deliberadamente un ajuste manual del repositorio en
+GitHub, no un paso más de automatización. Después de que la primera ejecución
+del workflow haga disponibles las comprobaciones:
 
-1. Open **Settings → Branches** (or **Rules → Rulesets**) in the repository.
-2. Add a rule/ruleset for `main` and require pull requests before merging.
-3. Require status checks to pass before merging. Select the checks shown as
-   `CI / Detect changes`, `CI / Lint Python`, `CI / Lint Dockerfile`,
-   `CI / Test app`, `CI / Test CLI`, and `CI / Build app image`.
-4. Save the rule. Keep the rule enabled for administrators if the repository is
-   being used as the CI/CD lesson's merge gate.
+1. Abre **Settings → Branches** (o **Rules → Rulesets**) en el repositorio.
+2. Añade una regla para `main` y exige pull requests antes de fusionar.
+3. Exige que las comprobaciones de estado pasen antes de fusionar. Selecciona
+   las que aparecen como `CI / Detect changes`, `CI / Lint Python`,
+   `CI / Lint Dockerfile`, `CI / Test app`, `CI / Test CLI` y
+   `CI / Build app image`.
+4. Guarda la regla. Mantenla activada también para administradores si el
+   repositorio se usa como la puerta de fusión de la lección de CI/CD.
 
-A red required check blocks the merge; a green (or path-filtered skipped)
-check is the permission to proceed. Self-hosted runners remain reserved for
-deployment work in the later deployment specification.
+Una comprobación requerida en rojo bloquea el merge; una en verde (o saltada
+por el filtro de rutas) es el permiso para continuar. Los runners
+autoalojados quedan reservados para el trabajo de despliegue.
 
-## Checking a run
+## Revisar una ejecución
 
-The worker does not push from the local checkout. After the orchestrator pushes
-the branch, find and watch the real run with bounded commands:
+El worker no hace push desde el checkout local. Después de que el orquestador
+haga push de la rama, localiza y observa la ejecución real con comandos
+acotados:
 
 ```sh
 gh run list --workflow ci.yml --limit 5
@@ -56,71 +63,76 @@ gh run watch <run-id> --exit-status
 gh run view <run-id> --log-failed
 ```
 
-`gh workflow view ci.yml` can also be used after the workflow exists on GitHub.
-There is deliberately no actionlint gate, coverage gate, mypy job, image
-publication, or deployment job in this workflow.
+También puedes usar `gh workflow view ci.yml` una vez que el workflow existe
+en GitHub. Deliberadamente no hay puerta de actionlint, ni de cobertura, ni
+job de mypy, ni publicación de imagen, ni despliegue en este workflow.
 
-## Continuous delivery
+## Entrega continua
 
-Three CD workflows deploy every accepted artifact to your own machine and a
-fourth lets you roll back. All deploys run on a `[self-hosted]` runner that
-must have Docker Compose and `curl`/`jq` available; `linux` is not part of
-the runner label so macOS runners work as well.
+Tres workflows de CD despliegan cada artefacto aceptado en tu propia máquina,
+y un cuarto permite hacer rollback. Todos los despliegues se ejecutan en un
+runner `[self-hosted]` que debe tener Docker Compose y `curl`/`jq`
+disponibles; `linux` no forma parte de la etiqueta del runner, así que los
+runners en macOS también funcionan.
 
-| Trigger | Workflow | Image tag | Environment | Gate |
+| Disparador | Workflow | Tag de imagen | Environment | Puerta |
 | --- | --- | --- | --- | --- |
-| `push` to `main` | `cd-dev.yml` | 8-char `GITHUB_SHA` | `dev` (`:8001`) | auto |
-| `push` tag `X.Y.Z-snapshot` | `cd-staging.yml` | `X.Y.Z-snapshot` | `staging` (`:8002`) | auto |
-| `push` tag `X.Y.Z` | `cd-prod.yml` | `X.Y.Z` | `prod` (`:8003`) | Environment approval |
+| `push` a `main` | `cd-dev.yml` | `GITHUB_SHA` de 8 caracteres | `dev` (`:8001`) | automático |
+| `push` de tag `X.Y.Z-snapshot` | `cd-staging.yml` | `X.Y.Z-snapshot` | `staging` (`:8002`) | automático |
+| `push` de tag `X.Y.Z` | `cd-prod.yml` | `X.Y.Z` | `prod` (`:8003`) | aprobación del Environment |
 
-Tags must not include a leading `v` and `pull_request` never deploys — each
-deploy workflow comments this safety invariant at the top. Builds use
-`app/Dockerfile` and push to `ghcr.io/vieitesss/hiss:<tag>` via the reusable
-`.github/workflows/_build-push.yml` (`workflow_call` input `tag`,
-`packages: write`, `GITHUB_TOKEN` login). Deploys run
+Los tags no deben llevar una `v` inicial y `pull_request` nunca despliega —
+cada workflow de despliegue comenta este invariante de seguridad en su
+cabecera. Las construcciones usan `app/Dockerfile` y publican en
+`ghcr.io/vieitesss/hiss:<tag>` a través del workflow reutilizable
+`.github/workflows/_build-push.yml` (`workflow_call` con entrada `tag`,
+permiso `packages: write`, login con `GITHUB_TOKEN`). Los despliegues ejecutan
 `POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} IMAGE_TAG=<tag>
 APP_VERSION=<tag> docker compose -f deploy/compose.yml --env-file
-deploy/<env>.env -p hiss-<env> pull && up -d` and then a smoke job curls
-`/healthz`, `/readyz`, and asserts `/version` (`{"version": "<tag>"}`) equals
-the deployed tag.
+deploy/<env>.env -p hiss-<env> pull && up -d` y después un job de humo hace
+curl a `/healthz` y `/readyz`, y comprueba que `/version`
+(`{"version": "<tag>"}`) coincide con el tag desplegado.
 
-### Tag mutability
+### Mutabilidad de los tags
 
-- `X.Y.Z-snapshot` is a **moving tag** — you may delete and re-push it while
-hardening a release. The trade-off is that staging history is not strictly
-immutable.
-- `X.Y.Z` is **immutable** once pushed; never move or re-push it.
+- `X.Y.Z-snapshot` es un **tag móvil** — puedes borrarlo y volver a subirlo
+  mientras endureces una release. La contrapartida es que el historial de
+  staging no es estrictamente inmutable.
+- `X.Y.Z` es **inmutable** una vez subido; nunca lo muevas ni lo vuelvas a
+  subir.
 
-### Prerequisites
+### Prerrequisitos
 
-1. **Self-hosted runner** registered with label `self-hosted` on the host that
-   will run the three Environments (Docker Engine + Compose v2 required).
-2. **GitHub Environments** `dev`, `staging`, `prod` created for the repo; each
-holds a secret `POSTGRES_PASSWORD` (never committed). `prod` has a required
-   reviewer (you) so the deploy job pauses for approval — the
-   Continuous Delivery vs Deployment distinction.
-3. **GHCR package `ghcr.io/vieitesss/hiss` set to public** so the runner can
-   `pull` without extra credentials; pushes use the workflow's
-   `GITHUB_TOKEN` with `packages: write`.
+1. **Runner autoalojado** registrado con la etiqueta `self-hosted` en la
+   máquina que ejecutará los tres Environments (requiere Docker Engine +
+   Compose v2).
+2. **GitHub Environments** `dev`, `staging` y `prod` creados en el
+   repositorio; cada uno guarda un secreto `POSTGRES_PASSWORD` (nunca
+   versionado). `prod` tiene un revisor requerido (tú) para que el job de
+   despliegue pause a la espera de aprobación — la distinción entre
+   Continuous Delivery y Continuous Deployment.
+3. **Paquete GHCR `ghcr.io/vieitesss/hiss` configurado como público** para
+   que el runner pueda hacer `pull` sin credenciales adicionales; los pushes
+   usan el `GITHUB_TOKEN` del workflow con `packages: write`.
 
 ### Rollback
 
-`rollback.yml` is `workflow_dispatch`-only (no build) — it redeploys any
-previous tag to any Environment. Prod rollbacks still require the `prod`
-Environment approval.
+`rollback.yml` sólo se dispara con `workflow_dispatch` (no construye nada) —
+redespliega cualquier tag anterior en cualquier Environment. Los rollbacks a
+prod siguen requiriendo la aprobación del Environment `prod`.
 
-- **UI:** Actions → Rollback → Run workflow → choose `environment` (`dev` |
-  `staging` | `prod`) and `tag`.
+- **Interfaz web:** Actions → Rollback → Run workflow → elige `environment`
+  (`dev` | `staging` | `prod`) y `tag`.
 - **CLI:**
 
 ```sh
 gh workflow run rollback.yml -f environment=prod -f tag=0.1.0
-# or for staging:
+# o para staging:
 gh workflow run rollback.yml -f environment=staging -f tag=0.1.0-snapshot
 gh run list --workflow rollback.yml --limit 5
 gh run view <run-id> --log-failed
 ```
 
-> TODO: the full release ceremony, promotion checklist, and rollback runbook
-> will live in `docs/release-process.md` (issue #7). This section is only a
-discovery pointer until that doc lands.
+> TODO: la ceremonia completa de release, la checklist de promoción y el
+> runbook de rollback vivirán en `docs/release-process.md` (issue #7). Esta
+> sección es sólo un puntero de descubrimiento hasta que ese documento exista.
