@@ -33,24 +33,13 @@ jobs:
   build:
     name: Build and push staging image
     needs: prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./app
-          file: ./app/Dockerfile
-          push: true
-          tags: ghcr.io/vieitesss/hiss:${{ needs.prepare.outputs.tag }}
+    uses: ./.github/workflows/_build-push.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
 
   deploy:
     name: Deploy staging
@@ -66,7 +55,7 @@ jobs:
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Pull staging image
         shell: bash
         run: |
