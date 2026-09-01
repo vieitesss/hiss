@@ -3,7 +3,7 @@ from sqlalchemy import func, case
 from sqlalchemy.exc import IntegrityError
 
 from . import api_bp
-from .errors import bad_request, conflict
+from .errors import bad_request, conflict, not_found
 from ..extensions import db
 from ..models import Project, Issue, IssueStatus
 
@@ -65,3 +65,13 @@ def create_project():
         return conflict(f"project key '{key}' already exists")
 
     return jsonify(_project_to_dict(project, 0)), 201
+
+
+@api_bp.route("/projects/<string:key>", methods=["DELETE"])
+def delete_project(key: str):
+    project = Project.query.filter_by(key=key).first()
+    if project is None:
+        return not_found(f"project '{key}' not found")
+    db.session.delete(project)
+    db.session.commit()
+    return "", 204

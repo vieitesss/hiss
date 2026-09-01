@@ -164,3 +164,13 @@ def update_issue(issue_id: int):
     # Ensure labels loaded for serialization
     issue = Issue.query.options(selectinload(Issue.labels)).filter_by(id=issue_id).first()
     return jsonify(_issue_to_dict(issue)), 200
+
+
+@api_bp.route("/issues/<int:issue_id>", methods=["DELETE"])
+def delete_issue(issue_id: int):
+    issue = Issue.query.filter_by(id=issue_id).first()
+    if issue is None:
+        return not_found(f"issue {issue_id} not found")
+    db.session.delete(issue)
+    db.session.commit()
+    return "", 204

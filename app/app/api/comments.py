@@ -42,3 +42,32 @@ def create_comment(issue_id: int):
     db.session.add(comment)
     db.session.commit()
     return jsonify(_comment_to_dict(comment)), 201
+
+
+@api_bp.route("/comments/<int:comment_id>", methods=["PATCH"])
+def update_comment(comment_id: int):
+    comment = Comment.query.filter_by(id=comment_id).first()
+    if comment is None:
+        return not_found(f"comment {comment_id} not found")
+
+    data = request.get_json(silent=True)
+    if data is None:
+        return bad_request("invalid JSON body")
+
+    body = data.get("body")
+    if not body or not isinstance(body, str) or not body.strip():
+        return bad_request("body is required")
+
+    comment.body = body.strip()
+    db.session.commit()
+    return jsonify(_comment_to_dict(comment)), 200
+
+
+@api_bp.route("/comments/<int:comment_id>", methods=["DELETE"])
+def delete_comment(comment_id: int):
+    comment = Comment.query.filter_by(id=comment_id).first()
+    if comment is None:
+        return not_found(f"comment {comment_id} not found")
+    db.session.delete(comment)
+    db.session.commit()
+    return "", 204

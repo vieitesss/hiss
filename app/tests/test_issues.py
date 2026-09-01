@@ -41,6 +41,24 @@ def test_update_issue_and_invalid_enum_returns_400(client):
     assert r.is_json
 
 
+def test_delete_issue_and_unknown_returns_404(client):
+    client.post("/api/v1/projects", json={"key": "DELI", "name": "Del"})
+    r = client.post("/api/v1/projects/DELI/issues", json={"title": "Gone"})
+    iid = r.get_json()["id"]
+    client.post(f"/api/v1/issues/{iid}/comments", json={"body": "bye"})
+
+    r = client.delete(f"/api/v1/issues/{iid}")
+    assert r.status_code == 204
+    r = client.get(f"/api/v1/issues/{iid}")
+    assert r.status_code == 404
+    r = client.get(f"/api/v1/issues/{iid}/comments")
+    assert r.status_code == 404
+
+    r = client.delete("/api/v1/issues/99999")
+    assert r.status_code == 404
+    assert r.is_json
+
+
 def test_unknown_project_or_issue_returns_404(client):
     r = client.get("/api/v1/projects/UNKNOWN/issues")
     assert r.status_code == 404

@@ -41,6 +41,16 @@ def create_label():
     return jsonify(_label_to_dict(label)), 201
 
 
+@api_bp.route("/labels/<string:name>", methods=["DELETE"])
+def delete_label(name: str):
+    label = Label.query.filter_by(name=name).first()
+    if label is None:
+        return not_found(f"label '{name}' not found")
+    db.session.delete(label)
+    db.session.commit()
+    return "", 204
+
+
 @api_bp.route("/issues/<int:issue_id>/labels/<string:name>", methods=["POST"])
 def attach_label(issue_id: int, name: str):
     issue = Issue.query.options(selectinload(Issue.labels)).filter_by(id=issue_id).first()

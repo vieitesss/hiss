@@ -33,3 +33,24 @@ def test_create_project_missing_field_returns_400(client):
     assert r.status_code == 400
     assert r.is_json
     assert r.content_type.startswith("application/json")
+
+
+def test_delete_project_cascades_issues(client):
+    client.post("/api/v1/projects", json={"key": "DEL", "name": "Delete me"})
+    r = client.post("/api/v1/projects/DEL/issues", json={"title": "Child"})
+    iid = r.get_json()["id"]
+    client.post(f"/api/v1/issues/{iid}/comments", json={"body": "note"})
+
+    r = client.delete("/api/v1/projects/DEL")
+    assert r.status_code == 204
+
+    r = client.get("/api/v1/projects")
+    assert all(p["key"] != "DEL" for p in r.get_json())
+    r = client.get(f"/api/v1/issues/{iid}")
+    assert r.status_code == 404
+
+
+def test_delete_unknown_project_returns_404(client):
+    r = client.delete("/api/v1/projects/NOPE")
+    assert r.status_code == 404
+    assert r.is_json
