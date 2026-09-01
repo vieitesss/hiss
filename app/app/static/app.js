@@ -19,6 +19,9 @@ const state = {
     priority: '',
     label: ''
   },
+  editingTitle: false,
+  editingDescription: false,
+  editingCommentId: null,
   appVersion: '...',
   issueRequestId: 0
 };
@@ -52,6 +55,7 @@ const ICON_PATHS = {
   back: '<path d="M12.25 8H3.75M7.25 4.5 3.75 8l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
   search: '<circle cx="7" cy="7" r="3.7" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="m9.75 9.75 3 3" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>',
   flame: '<path d="M8.45 13.25c2.25-.2 3.7-1.58 3.7-3.7 0-1.72-.98-3.05-2.35-4.2.12 1.3-.37 2.03-1.08 2.52.12-2.18-.9-3.7-2.2-5.12.08 2.35-2.65 3.18-2.65 6.15 0 2.43 1.87 4.25 4.58 4.35Z" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>',
+  trash: '<path d="M3.5 4.5h9M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5m1.5 0v8a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 4.5 12.5v-8" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
   edit: '<path d="m3 10.9-.45 2.55L5.1 13l7.1-7.1-2.1-2.1L3 10.9Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="m9.3 4.5 2.1 2.1" fill="none" stroke="currentColor" stroke-width="1.2"/>',
   plusCircle: '<circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8 5v6M5 8h6" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>',
   checkCircle: '<circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="m5.25 8.1 1.75 1.75 3.75-3.7" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>'
@@ -179,13 +183,16 @@ function renderPriorityBadge(priority) {
   return `<span class="priority-badge priority-${value}">${priorityIcon(value)}<span>${escapeHtml(formatPriority(value))}</span></span>`;
 }
 
-function renderLabelBadge(label, removable = false, issueId = null) {
+function renderLabelBadge(label, removable = false, issueId = null, isCatalog = false) {
   const name = label && label.name ? String(label.name) : '';
   if (!name) return '';
   const tone = labelTone(name);
-  const removeButton = removable && issueId !== null
-    ? `<button type="button" class="btn-close-custom" data-label-name="${escapeHtml(name)}" aria-label="Remove ${escapeHtml(name)}" onclick="app.handleDetachLabel(${issueId}, this.dataset.labelName, event)">&times;</button>`
-    : '';
+  let removeButton = '';
+  if (isCatalog) {
+    removeButton = `<button type="button" class="btn-close-custom" data-label-name="${escapeHtml(name)}" aria-label="Delete catalog label ${escapeHtml(name)}" onclick="app.handleDeleteCatalogLabel(this.dataset.labelName, event)">&times;</button>`;
+  } else if (removable && issueId !== null) {
+    removeButton = `<button type="button" class="btn-close-custom" data-label-name="${escapeHtml(name)}" aria-label="Remove ${escapeHtml(name)}" onclick="app.handleDetachLabel(${issueId}, this.dataset.labelName, event)">&times;</button>`;
+  }
   return `<span class="label-pill label-tone-${tone}"><span>${escapeHtml(name)}</span>${removeButton}</span>`;
 }
 
@@ -233,6 +240,9 @@ function parseHash() {
 
 async function handleHashChange() {
   clearAlerts();
+  state.editingTitle = false;
+  state.editingDescription = false;
+  state.editingCommentId = null;
   const route = parseHash();
   if (route.view === 'projects') {
     await loadProjectsView();
@@ -263,16 +273,17 @@ function renderProjectsList(projects) {
   if (!main) return;
 
   let content = `
-    <section class="page-header">
-      <div>
-        <div class="page-eyebrow">Workspace</div>
-        <h1 class="page-title">Projects</h1>
-        <p class="page-subtitle">Keep product work organized in focused project spaces.</p>
-      </div>
-      <button class="btn btn-sm btn-primary px-3" type="button" onclick="app.openCreateProjectModal()">
-        ${icon('plus', 'icon icon-sm me-1')} New project
-      </button>
-    </section>
+    <div class="projects-container">
+      <section class="page-header">
+        <div>
+          <div class="page-eyebrow">Workspace</div>
+          <h1 class="page-title">Projects</h1>
+          <p class="page-subtitle">Keep product work organized in focused project spaces.</p>
+        </div>
+        <button class="btn btn-sm btn-primary px-3" type="button" onclick="app.openCreateProjectModal()">
+          ${icon('plus', 'icon icon-sm me-1')} New project
+        </button>
+      </section>
   `;
 
   if (!projects || projects.length === 0) {
@@ -288,6 +299,7 @@ function renderProjectsList(projects) {
     content += `<section class="project-list surface-card" aria-label="Projects">`;
     projects.forEach(project => {
       const openCount = typeof project.open_issues === 'number' ? project.open_issues : 0;
+      const issueLabel = openCount === 1 ? 'open issue' : 'open issues';
       content += `
         <a class="project-list-row" href="#/projects/${encodeURIComponent(project.key)}">
           <div class="project-list-main">
@@ -295,13 +307,17 @@ function renderProjectsList(projects) {
             <span class="project-list-key">${escapeHtml(project.key)}</span>
           </div>
           <div class="project-list-meta">
-            <span class="project-open-badge">${openCount} open</span>
+            <span class="project-open-badge">${openCount} ${issueLabel}</span>
+            <button type="button" class="btn-row-action" title="Delete project" aria-label="Delete project ${escapeHtml(project.key)}" onclick="app.handleDeleteProject('${escapeHtml(project.key)}', event)">
+              ${icon('trash', 'icon icon-xs')}
+            </button>
           </div>
         </a>
       `;
     });
     content += '</section>';
   }
+  content += `</div>`;
   main.innerHTML = content;
 }
 
@@ -361,8 +377,6 @@ async function fetchAndRenderIssues() {
     } else {
       showAlert(error.message || 'Failed to fetch issues');
     }
-    // Keep the view useful on errors: the table can still show the last
-    // successful result, while the intentional alert explains what happened.
     renderProjectIssuesView();
   }
 }
@@ -583,6 +597,9 @@ async function loadIssueDetailView(issueId) {
       }
     }
     state.currentProject = matchingProject || null;
+    state.editingTitle = false;
+    state.editingDescription = false;
+    state.editingCommentId = null;
     renderIssueDetailView();
   } catch (error) {
     showAlert(error.message || `Failed to load issue #${issueId}`);
@@ -614,69 +631,151 @@ function renderIssueDetailView() {
       <span class="breadcrumb-current">#${escapeHtml(issue.id)}</span>
     </div>
 
-    <div class="detail-layout">
-      <div class="detail-main-column">
-        <section class="detail-title-block">
-          <div class="detail-eyebrow">
-            <span class="detail-project-key">${escapeHtml(projectKey)}</span>
-            <span aria-hidden="true">·</span>
-            <span>Issue #${escapeHtml(issue.id)}</span>
-          </div>
-          <h1 class="detail-title">${escapeHtml(issue.title)}</h1>
-          <div class="detail-title-meta">
-            ${renderStatusBadge(issue.status)}
-            ${renderPriorityBadge(issue.priority)}
-            <span class="meta-separator" aria-hidden="true">·</span>
-            <span title="${escapeHtml(issue.created_at || '')}">Created ${escapeHtml(created)}</span>
-          </div>
-        </section>
-
-        <article class="surface-card description-card">
-          <div class="card-section-heading">
-            <span>Description</span>
-            ${issue.description ? '' : '<span class="text-muted small">No details added</span>'}
-          </div>
-          <div class="description-content${issue.description ? '' : ' description-empty'}">${escapeHtml(issue.description || 'No description provided yet.')}</div>
-        </article>
-
-        <section class="surface-card comments-card" aria-labelledby="commentsHeading">
-          <div class="card-section-heading comments-heading">
-            <div class="d-flex align-items-center gap-2">
-              <h2 id="commentsHeading">Comments</h2>
-              <span class="comments-count">${comments.length}</span>
-            </div>
-            ${comments.length ? `<span class="text-muted small">Latest activity</span>` : ''}
-          </div>
-          <div class="comments-list" id="commentsList">
+    <section class="detail-title-section">
+      <div class="detail-eyebrow">
+        <span class="detail-project-key">${escapeHtml(projectKey)}</span>
+        <span aria-hidden="true">·</span>
+        <span>Issue #${escapeHtml(issue.id)}</span>
+      </div>
   `;
 
-  if (comments.length === 0) {
-    content += `<div class="no-comments">No comments yet. Add the first bit of context below.</div>`;
+  if (state.editingTitle) {
+    content += `
+      <form class="detail-title-edit-form" onsubmit="app.handleSaveTitle(event, ${escapeHtml(issue.id)})">
+        <input type="text" class="form-control form-control-app detail-title-input" id="editTitleInput" value="${escapeHtml(issue.title)}" required autofocus>
+        <button type="submit" class="btn btn-sm btn-primary">Save</button>
+        <button type="button" class="btn btn-sm btn-light border" onclick="app.cancelEditTitle()">Cancel</button>
+      </form>
+    `;
   } else {
-    comments.forEach(comment => {
-      content += `
-        <article class="comment-box">
-          <div class="comment-meta">
-            <span class="comment-number">Comment #${escapeHtml(comment.id)}</span>
-            <time class="comment-date" datetime="${escapeHtml(comment.created_at || '')}">${escapeHtml(comment.created_at ? formatDate(comment.created_at, true) : '')}</time>
-          </div>
-          <div class="comment-body">${escapeHtml(comment.body)}</div>
-        </article>
-      `;
-    });
+    content += `
+      <div class="detail-title-header">
+        <div class="detail-title-display">
+          <h1 class="detail-title">${escapeHtml(issue.title)}</h1>
+          <span class="detail-issue-number">#${escapeHtml(issue.id)}</span>
+        </div>
+        <div class="detail-title-actions">
+          <button type="button" class="btn btn-sm btn-light border" onclick="app.startEditTitle()">
+            ${icon('edit', 'icon icon-xs me-1')} Edit
+          </button>
+        </div>
+      </div>
+    `;
   }
 
   content += `
+      <div class="detail-title-meta">
+        ${renderStatusBadge(issue.status)}
+        ${renderPriorityBadge(issue.priority)}
+        <span class="meta-separator" aria-hidden="true">·</span>
+        <span title="${escapeHtml(issue.created_at || '')}">Created ${escapeHtml(created)}</span>
+        <span class="meta-separator" aria-hidden="true">·</span>
+        <span>${comments.length} ${comments.length === 1 ? 'comment' : 'comments'}</span>
+      </div>
+    </section>
+
+    <div class="detail-layout">
+      <div class="detail-timeline">
+        <!-- Description timeline item -->
+        <div class="timeline-item">
+          <article class="timeline-box">
+            <div class="timeline-header">
+              <div class="timeline-header-left">
+                <span class="timeline-author">Description</span>
+                <span class="timeline-time">${escapeHtml(created)}</span>
+              </div>
+              <div class="timeline-actions">
+                ${state.editingDescription ? '' : `
+                  <button type="button" class="timeline-action-btn" onclick="app.startEditDescription()">
+                    ${icon('edit', 'icon icon-xs me-1')} Edit
+                  </button>
+                `}
+              </div>
+            </div>
+  `;
+
+  if (state.editingDescription) {
+    content += `
+      <form class="timeline-edit-form" onsubmit="app.handleSaveDescription(event, ${escapeHtml(issue.id)})">
+        <textarea class="form-control form-control-app" id="editDescriptionInput" rows="5" placeholder="Add a description…">${escapeHtml(issue.description || '')}</textarea>
+        <div class="timeline-edit-actions">
+          <button type="button" class="btn btn-sm btn-light border" onclick="app.cancelEditDescription()">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-primary px-3">Save</button>
+        </div>
+      </form>
+    `;
+  } else {
+    content += `
+      <div class="timeline-body${issue.description ? '' : ' timeline-body-empty'}">${escapeHtml(issue.description || 'No description provided.')}</div>
+    `;
+  }
+
+  content += `
+          </article>
+        </div>
+
+        <!-- Comments timeline items -->
+  `;
+
+  comments.forEach(comment => {
+    const isEditing = state.editingCommentId === comment.id;
+    const commentDate = comment.created_at ? formatDate(comment.created_at, true) : '';
+    content += `
+      <div class="timeline-item">
+        <article class="timeline-box">
+          <div class="timeline-header">
+            <div class="timeline-header-left">
+              <span class="timeline-author">Comment</span>
+              <span class="timeline-badge">#${escapeHtml(comment.id)}</span>
+              <span class="timeline-time">${escapeHtml(commentDate)}</span>
+            </div>
+            <div class="timeline-actions">
+              ${isEditing ? '' : `
+                <button type="button" class="timeline-action-btn" onclick="app.startEditComment(${escapeHtml(comment.id)})">
+                  ${icon('edit', 'icon icon-xs me-1')} Edit
+                </button>
+                <button type="button" class="timeline-action-btn danger" onclick="app.handleDeleteComment(${escapeHtml(comment.id)}, ${escapeHtml(issue.id)})">
+                  ${icon('trash', 'icon icon-xs me-1')} Delete
+                </button>
+              `}
+            </div>
           </div>
-          <form class="comment-composer" onsubmit="app.handleAddComment(event, ${escapeHtml(issue.id)})">
-            <label for="commentBodyInput">Add a comment</label>
-            <textarea class="form-control form-control-app" id="commentBodyInput" rows="3" placeholder="Share an update or leave a note…" required></textarea>
+    `;
+
+    if (isEditing) {
+      content += `
+        <form class="timeline-edit-form" onsubmit="app.handleSaveComment(event, ${escapeHtml(comment.id)}, ${escapeHtml(issue.id)})">
+          <textarea class="form-control form-control-app" id="editCommentInput_${escapeHtml(comment.id)}" rows="4" required>${escapeHtml(comment.body)}</textarea>
+          <div class="timeline-edit-actions">
+            <button type="button" class="btn btn-sm btn-light border" onclick="app.cancelEditComment()">Cancel</button>
+            <button type="submit" class="btn btn-sm btn-primary px-3">Save</button>
+          </div>
+        </form>
+      `;
+    } else {
+      content += `
+        <div class="timeline-body">${escapeHtml(comment.body)}</div>
+      `;
+    }
+
+    content += `
+        </article>
+      </div>
+    `;
+  });
+
+  content += `
+        <!-- Add comment composer -->
+        <div class="composer-box">
+          <div class="composer-header">Add a comment</div>
+          <form class="composer-body" onsubmit="app.handleAddComment(event, ${escapeHtml(issue.id)})">
+            <textarea class="form-control form-control-app" id="commentBodyInput" rows="3" placeholder="Leave a comment…" required></textarea>
             <div class="composer-footer">
-              <span class="composer-hint">Comments are visible to everyone on this project.</span>
-              <button type="submit" class="btn btn-sm btn-primary px-3">Post comment</button>
+              <span class="composer-hint">Comments are visible on this issue.</span>
+              <button type="submit" class="btn btn-sm btn-primary px-3">Comment</button>
             </div>
           </form>
-        </section>
+        </div>
       </div>
 
       <aside class="issue-sidebar" aria-label="Issue properties">
@@ -733,6 +832,15 @@ function renderIssueDetailView() {
             <span class="property-value" title="${escapeHtml(issue.created_at || '')}">${escapeHtml(issue.created_at ? formatDate(issue.created_at) : 'Unknown')}</span>
           </div>
         </section>
+
+        <section class="surface-card properties-card">
+          <div class="properties-heading"><span class="text-danger">Danger zone</span></div>
+          <div class="sidebar-danger-zone">
+            <button type="button" class="btn btn-sm btn-ghost-danger w-100" onclick="app.handleDeleteIssue(${escapeHtml(issue.id)})">
+              ${icon('trash', 'icon icon-xs me-1')} Delete issue
+            </button>
+          </div>
+        </section>
       </aside>
     </div>
   `;
@@ -763,6 +871,23 @@ async function handleCreateProject(event) {
   }
 }
 
+async function handleDeleteProject(projectKey, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const confirmed = window.confirm(`Are you sure you want to delete project '${projectKey}' and all of its issues?`);
+  if (!confirmed) return;
+
+  try {
+    await apiRequest(`${API_BASE}/projects/${encodeURIComponent(projectKey)}`, { method: 'DELETE' });
+    showAlert(`Project '${projectKey}' deleted.`, 'success');
+    await loadProjectsView();
+  } catch (error) {
+    showAlert(error.message || `Failed to delete project '${projectKey}'`);
+  }
+}
+
 async function handleCreateIssue(event) {
   event.preventDefault();
   if (!state.currentProject) return;
@@ -789,6 +914,140 @@ async function handleCreateIssue(event) {
     window.location.hash = `#/issues/${newIssue.id}`;
   } catch (error) {
     showAlert(error.message || 'Failed to create issue');
+  }
+}
+
+async function handleDeleteIssue(issueId) {
+  const confirmed = window.confirm(`Are you sure you want to delete issue #${issueId}?`);
+  if (!confirmed) return;
+
+  const projectKey = state.currentProject ? state.currentProject.key : null;
+  try {
+    await apiRequest(`${API_BASE}/issues/${issueId}`, { method: 'DELETE' });
+    showAlert(`Issue #${issueId} deleted.`, 'success');
+    if (projectKey) {
+      window.location.hash = `#/projects/${encodeURIComponent(projectKey)}`;
+    } else {
+      window.location.hash = '#/projects';
+    }
+  } catch (error) {
+    showAlert(error.message || `Failed to delete issue #${issueId}`);
+  }
+}
+
+function startEditTitle() {
+  state.editingTitle = true;
+  renderIssueDetailView();
+  const input = document.getElementById('editTitleInput');
+  if (input) {
+    input.focus();
+    input.select();
+  }
+}
+
+function cancelEditTitle() {
+  state.editingTitle = false;
+  renderIssueDetailView();
+}
+
+async function handleSaveTitle(event, issueId) {
+  event.preventDefault();
+  const input = document.getElementById('editTitleInput');
+  if (!input) return;
+  const title = input.value.trim();
+  if (!title) {
+    showAlert('Title cannot be empty');
+    return;
+  }
+
+  try {
+    const updated = await apiRequest(`${API_BASE}/issues/${issueId}`, { method: 'PATCH', body: { title } });
+    state.currentIssue = updated;
+    state.editingTitle = false;
+    renderIssueDetailView();
+    showAlert('Title updated.', 'success');
+  } catch (error) {
+    showAlert(error.message || 'Failed to update title');
+  }
+}
+
+function startEditDescription() {
+  state.editingDescription = true;
+  renderIssueDetailView();
+  const input = document.getElementById('editDescriptionInput');
+  if (input) {
+    input.focus();
+  }
+}
+
+function cancelEditDescription() {
+  state.editingDescription = false;
+  renderIssueDetailView();
+}
+
+async function handleSaveDescription(event, issueId) {
+  event.preventDefault();
+  const input = document.getElementById('editDescriptionInput');
+  if (!input) return;
+  const description = input.value;
+
+  try {
+    const updated = await apiRequest(`${API_BASE}/issues/${issueId}`, { method: 'PATCH', body: { description } });
+    state.currentIssue = updated;
+    state.editingDescription = false;
+    renderIssueDetailView();
+    showAlert('Description updated.', 'success');
+  } catch (error) {
+    showAlert(error.message || 'Failed to update description');
+  }
+}
+
+function startEditComment(commentId) {
+  state.editingCommentId = commentId;
+  renderIssueDetailView();
+  const input = document.getElementById(`editCommentInput_${commentId}`);
+  if (input) {
+    input.focus();
+  }
+}
+
+function cancelEditComment() {
+  state.editingCommentId = null;
+  renderIssueDetailView();
+}
+
+async function handleSaveComment(event, commentId, issueId) {
+  event.preventDefault();
+  const input = document.getElementById(`editCommentInput_${commentId}`);
+  if (!input) return;
+  const body = input.value.trim();
+  if (!body) {
+    showAlert('Comment body cannot be empty');
+    return;
+  }
+
+  try {
+    const updatedComment = await apiRequest(`${API_BASE}/comments/${commentId}`, { method: 'PATCH', body: { body } });
+    state.currentComments = (state.currentComments || []).map(c => c.id === commentId ? updatedComment : c);
+    state.editingCommentId = null;
+    renderIssueDetailView();
+    showAlert('Comment updated.', 'success');
+  } catch (error) {
+    showAlert(error.message || 'Failed to update comment');
+  }
+}
+
+async function handleDeleteComment(commentId, issueId) {
+  const confirmed = window.confirm(`Are you sure you want to delete comment #${commentId}?`);
+  if (!confirmed) return;
+
+  try {
+    await apiRequest(`${API_BASE}/comments/${commentId}`, { method: 'DELETE' });
+    state.currentComments = (state.currentComments || []).filter(c => c.id !== commentId);
+    renderIssueDetailView();
+    showAlert('Comment deleted.', 'success');
+  } catch (error) {
+    showAlert(error.message || 'Failed to delete comment');
   }
 }
 
@@ -824,8 +1083,9 @@ async function handleAddComment(event, issueId) {
   if (!body) return;
 
   try {
-    await apiRequest(`${API_BASE}/issues/${issueId}/comments`, { method: 'POST', body: { body } });
-    await loadIssueDetailView(issueId);
+    const newComment = await apiRequest(`${API_BASE}/issues/${issueId}/comments`, { method: 'POST', body: { body } });
+    state.currentComments = [...(state.currentComments || []), newComment];
+    renderIssueDetailView();
     showAlert('Comment added.', 'success');
   } catch (error) {
     showAlert(error.message || 'Failed to add comment');
@@ -837,8 +1097,11 @@ async function handleAttachSelectedLabel(issueId) {
   if (!select || !select.value) return;
   const labelName = select.value;
   try {
-    await apiRequest(`${API_BASE}/issues/${issueId}/labels/${encodeURIComponent(labelName)}`, { method: 'POST' });
-    await loadIssueDetailView(issueId);
+    const attached = await apiRequest(`${API_BASE}/issues/${issueId}/labels/${encodeURIComponent(labelName)}`, { method: 'POST' });
+    if (state.currentIssue) {
+      state.currentIssue.labels = attached.labels || [];
+    }
+    renderIssueDetailView();
     showAlert(`Label '${labelName}' attached.`, 'success');
   } catch (error) {
     showAlert(error.message || 'Failed to attach label');
@@ -846,10 +1109,16 @@ async function handleAttachSelectedLabel(issueId) {
 }
 
 async function handleDetachLabel(issueId, labelName, event) {
-  if (event) event.stopPropagation();
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
   try {
-    await apiRequest(`${API_BASE}/issues/${issueId}/labels/${encodeURIComponent(labelName)}`, { method: 'DELETE' });
-    await loadIssueDetailView(issueId);
+    const remaining = await apiRequest(`${API_BASE}/issues/${issueId}/labels/${encodeURIComponent(labelName)}`, { method: 'DELETE' });
+    if (state.currentIssue) {
+      state.currentIssue.labels = remaining.labels || [];
+    }
+    renderIssueDetailView();
     showAlert(`Label '${labelName}' removed.`, 'info');
   } catch (error) {
     showAlert(error.message || 'Failed to remove label');
@@ -878,6 +1147,28 @@ async function handleCreateLabel(event) {
   }
 }
 
+async function handleDeleteCatalogLabel(labelName, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const confirmed = window.confirm(`Are you sure you want to delete label '${labelName}'? It will be removed from all issues.`);
+  if (!confirmed) return;
+
+  try {
+    await apiRequest(`${API_BASE}/labels/${encodeURIComponent(labelName)}`, { method: 'DELETE' });
+    showAlert(`Label '${labelName}' deleted.`, 'info');
+    await refreshManageLabelsModal();
+    if (state.currentIssue) {
+      await loadIssueDetailView(state.currentIssue.id);
+    } else if (state.currentProject) {
+      await fetchAndRenderIssues();
+    }
+  } catch (error) {
+    showAlert(error.message || `Failed to delete label '${labelName}'`);
+  }
+}
+
 async function refreshManageLabelsModal() {
   try {
     const labels = await apiRequest(`${API_BASE}/labels`);
@@ -885,7 +1176,7 @@ async function refreshManageLabelsModal() {
     const container = document.getElementById('labelsListContainer');
     if (!container) return;
     container.innerHTML = state.allLabels.length
-      ? state.allLabels.map(label => renderLabelBadge(label)).join('')
+      ? state.allLabels.map(label => renderLabelBadge(label, true, null, true)).join('')
       : '<span class="empty-inline">No labels created yet.</span>';
   } catch (error) {
     const container = document.getElementById('labelsListContainer');
@@ -974,8 +1265,21 @@ window.app = {
   openCreateIssueModal,
   openManageLabelsModal,
   handleCreateProject,
+  handleDeleteProject,
   handleCreateIssue,
+  handleDeleteIssue,
+  startEditTitle,
+  cancelEditTitle,
+  handleSaveTitle,
+  startEditDescription,
+  cancelEditDescription,
+  handleSaveDescription,
+  startEditComment,
+  cancelEditComment,
+  handleSaveComment,
+  handleDeleteComment,
   handleCreateLabel,
+  handleDeleteCatalogLabel,
   handleAddComment,
   handleUpdateStatus,
   handleUpdatePriority,
