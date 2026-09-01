@@ -26,7 +26,9 @@ def test_labels_list_table(monkeypatch):
     def handler(request: httpx.Request):
         assert request.method == "GET"
         assert request.url.path == "/api/v1/labels"
-        return httpx.Response(200, json=[{"id": 1, "name": "bug"}, {"id": 2, "name": "feature"}], request=request)
+        return httpx.Response(
+            200, json=[{"id": 1, "name": "bug"}, {"id": 2, "name": "feature"}], request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["labels", "list"])
@@ -73,7 +75,11 @@ def test_labels_create_json(monkeypatch):
 
 def test_labels_create_409(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(409, json={"error": "conflict", "message": "label 'bug' already exists"}, request=request)
+        return httpx.Response(
+            409,
+            json={"error": "conflict", "message": "label 'bug' already exists"},
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["labels", "create", "bug"])
@@ -83,7 +89,9 @@ def test_labels_create_409(monkeypatch):
 
 def test_labels_create_400(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(400, json={"error": "bad_request", "message": "name is required"}, request=request)
+        return httpx.Response(
+            400, json={"error": "bad_request", "message": "name is required"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["labels", "create", "   "])

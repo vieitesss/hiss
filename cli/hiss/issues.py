@@ -30,7 +30,9 @@ def list_issues(
     # If no filters, params stays empty
     try:
         with hiss.client.get_client(ctx) as client:
-            resp = client.get(f"/api/v1/projects/{project}/issues", params=params if params else None)
+            resp = client.get(
+                f"/api/v1/projects/{project}/issues", params=params if params else None
+            )
     except httpx.RequestError as exc:
         hiss.client.handle_request_error(exc, base_url)
     data = hiss.client.handle_response(resp)
@@ -44,13 +46,15 @@ def list_issues(
             rows = []
             for iss in data:
                 labels = ", ".join(lb.get("name", "") for lb in (iss.get("labels") or []))
-                rows.append([
-                    iss.get("id", ""),
-                    iss.get("title", "")[:50],
-                    iss.get("status", ""),
-                    iss.get("priority", ""),
-                    labels,
-                ])
+                rows.append(
+                    [
+                        iss.get("id", ""),
+                        iss.get("title", "")[:50],
+                        iss.get("status", ""),
+                        iss.get("priority", ""),
+                        labels,
+                    ]
+                )
             print_table(headers, rows, title=f"Issues in {project}")
 
 
@@ -83,7 +87,14 @@ def create_issue(
         print_json(data)
     else:
         headers = ["id", "title", "status", "priority"]
-        rows = [[data.get("id", ""), data.get("title", ""), data.get("status", ""), data.get("priority", "")]]
+        rows = [
+            [
+                data.get("id", ""),
+                data.get("title", ""),
+                data.get("status", ""),
+                data.get("priority", ""),
+            ]
+        ]
         print_table(headers, rows, title="Created Issue")
 
 
@@ -118,7 +129,14 @@ def update_issue(
         print_json(data)
     else:
         headers = ["id", "title", "status", "priority"]
-        rows = [[data.get("id", ""), data.get("title", ""), data.get("status", ""), data.get("priority", "")]]
+        rows = [
+            [
+                data.get("id", ""),
+                data.get("title", ""),
+                data.get("status", ""),
+                data.get("priority", ""),
+            ]
+        ]
         print_table(headers, rows, title=f"Updated Issue {issue_id}")
 
 

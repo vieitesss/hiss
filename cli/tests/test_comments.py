@@ -26,7 +26,11 @@ def test_comments_list_table(monkeypatch):
     def handler(request: httpx.Request):
         assert request.method == "GET"
         assert request.url.path == "/api/v1/issues/42/comments"
-        return httpx.Response(200, json=[{"id": 1, "issue_id": 42, "body": "hi", "created_at": "2024-01-01T00:00:00"}], request=request)
+        return httpx.Response(
+            200,
+            json=[{"id": 1, "issue_id": 42, "body": "hi", "created_at": "2024-01-01T00:00:00"}],
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["comments", "list", "42"])
@@ -36,7 +40,11 @@ def test_comments_list_table(monkeypatch):
 
 def test_comments_list_json(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(200, json=[{"id": 1, "issue_id": 42, "body": "hi", "created_at": "2024-01-01T00:00:00"}], request=request)
+        return httpx.Response(
+            200,
+            json=[{"id": 1, "issue_id": 42, "body": "hi", "created_at": "2024-01-01T00:00:00"}],
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["comments", "list", "42", "--json"])
@@ -47,7 +55,9 @@ def test_comments_list_json(monkeypatch):
 
 def test_comments_list_404(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(404, json={"error": "not_found", "message": "issue 42 not found"}, request=request)
+        return httpx.Response(
+            404, json={"error": "not_found", "message": "issue 42 not found"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["comments", "list", "42"])
@@ -61,7 +71,16 @@ def test_comments_add_happy(monkeypatch):
         assert request.url.path == "/api/v1/issues/42/comments"
         body = json.loads(request.content.decode())
         assert body == {"body": "reproduced on staging"}
-        return httpx.Response(201, json={"id": 1, "issue_id": 42, "body": "reproduced on staging", "created_at": "2024-01-01T00:00:00"}, request=request)
+        return httpx.Response(
+            201,
+            json={
+                "id": 1,
+                "issue_id": 42,
+                "body": "reproduced on staging",
+                "created_at": "2024-01-01T00:00:00",
+            },
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["comments", "add", "42", "reproduced on staging"])
@@ -71,7 +90,11 @@ def test_comments_add_happy(monkeypatch):
 
 def test_comments_add_json(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(201, json={"id": 1, "issue_id": 42, "body": "hi", "created_at": "2024-01-01T00:00:00"}, request=request)
+        return httpx.Response(
+            201,
+            json={"id": 1, "issue_id": 42, "body": "hi", "created_at": "2024-01-01T00:00:00"},
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["comments", "add", "42", "hi", "--json"])
@@ -82,7 +105,9 @@ def test_comments_add_json(monkeypatch):
 
 def test_comments_add_400(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(400, json={"error": "bad_request", "message": "body is required"}, request=request)
+        return httpx.Response(
+            400, json={"error": "bad_request", "message": "body is required"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["comments", "add", "42", "x"])
@@ -92,7 +117,9 @@ def test_comments_add_400(monkeypatch):
 
 def test_comments_add_404(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(404, json={"error": "not_found", "message": "issue 42 not found"}, request=request)
+        return httpx.Response(
+            404, json={"error": "not_found", "message": "issue 42 not found"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["comments", "add", "42", "hi"])

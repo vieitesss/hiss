@@ -4,6 +4,13 @@ Un gestor de issues mínimo y autoalojable (Flask + Postgres + API REST + CLI), 
 
 > Repo en construcción — ver los issues para el plan de implementación y `CONTEXT.md` para el glosario de dominio.
 
+## Integración continua
+
+GitHub Actions ejecuta los checks de lint, tests y construcción de imagen
+descritos en [`docs/setup.md`](docs/setup.md). Configura manualmente la
+protección de la rama `main` después de la primera ejecución del workflow para
+que un resultado rojo de CI bloquee los merges.
+
 ## Despliegue con Docker Compose
 
 La imagen de la aplicación se referencia como `${IMAGE}:${IMAGE_TAG}`. Cada

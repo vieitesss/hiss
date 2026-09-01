@@ -27,7 +27,11 @@ def test_issues_list_basic(monkeypatch):
         assert request.method == "GET"
         assert request.url.path == "/api/v1/projects/OPS/issues"
         assert request.url.query == b""
-        return httpx.Response(200, json=[{"id": 1, "title": "T", "status": "open", "priority": "medium", "labels": []}], request=request)
+        return httpx.Response(
+            200,
+            json=[{"id": 1, "title": "T", "status": "open", "priority": "medium", "labels": []}],
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "list", "--project", "OPS"])
@@ -43,10 +47,36 @@ def test_issues_list_with_filters(monkeypatch):
         assert q.get("status") == "open"
         assert q.get("priority") == "high"
         assert q.get("label") == "bug"
-        return httpx.Response(200, json=[{"id": 2, "title": "Filtered", "status": "open", "priority": "high", "labels": [{"id": 1, "name": "bug"}]}], request=request)
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": 2,
+                    "title": "Filtered",
+                    "status": "open",
+                    "priority": "high",
+                    "labels": [{"id": 1, "name": "bug"}],
+                }
+            ],
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
-    result = runner.invoke(app, ["issues", "list", "--project", "OPS", "--status", "open", "--priority", "high", "--label", "bug"])
+    result = runner.invoke(
+        app,
+        [
+            "issues",
+            "list",
+            "--project",
+            "OPS",
+            "--status",
+            "open",
+            "--priority",
+            "high",
+            "--label",
+            "bug",
+        ],
+    )
     assert result.exit_code == 0
     assert "Filtered" in result.output
     assert "bug" in result.output
@@ -54,7 +84,11 @@ def test_issues_list_with_filters(monkeypatch):
 
 def test_issues_list_json(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(200, json=[{"id": 1, "title": "T", "status": "open", "priority": "medium", "labels": []}], request=request)
+        return httpx.Response(
+            200,
+            json=[{"id": 1, "title": "T", "status": "open", "priority": "medium", "labels": []}],
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "list", "--project", "OPS", "--json"])
@@ -65,7 +99,14 @@ def test_issues_list_json(monkeypatch):
 
 def test_issues_list_label_filter_feature_disabled(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(400, json={"error": "feature_disabled", "message": "label filtering is disabled (FEATURE_LABEL_FILTERING=false)"}, request=request)
+        return httpx.Response(
+            400,
+            json={
+                "error": "feature_disabled",
+                "message": "label filtering is disabled (FEATURE_LABEL_FILTERING=false)",
+            },
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "list", "--project", "OPS", "--label", "bug"])
@@ -80,10 +121,16 @@ def test_issues_create_happy(monkeypatch):
         body = json.loads(request.content.decode())
         assert body["title"] == "T"
         assert body["priority"] == "high"
-        return httpx.Response(201, json={"id": 42, "title": "T", "status": "open", "priority": "high", "labels": []}, request=request)
+        return httpx.Response(
+            201,
+            json={"id": 42, "title": "T", "status": "open", "priority": "high", "labels": []},
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
-    result = runner.invoke(app, ["issues", "create", "--project", "OPS", "--title", "T", "--priority", "high"])
+    result = runner.invoke(
+        app, ["issues", "create", "--project", "OPS", "--title", "T", "--priority", "high"]
+    )
     assert result.exit_code == 0
     assert "T" in result.output
 
@@ -92,16 +139,24 @@ def test_issues_create_with_description(monkeypatch):
     def handler(request: httpx.Request):
         body = json.loads(request.content.decode())
         assert body["description"] == "desc text"
-        return httpx.Response(201, json={"id": 43, "title": "T2", "status": "open", "priority": "medium", "labels": []}, request=request)
+        return httpx.Response(
+            201,
+            json={"id": 43, "title": "T2", "status": "open", "priority": "medium", "labels": []},
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
-    result = runner.invoke(app, ["issues", "create", "--project", "OPS", "--title", "T2", "--description", "desc text"])
+    result = runner.invoke(
+        app, ["issues", "create", "--project", "OPS", "--title", "T2", "--description", "desc text"]
+    )
     assert result.exit_code == 0
 
 
 def test_issues_create_404(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(404, json={"error": "not_found", "message": "project 'OPS' not found"}, request=request)
+        return httpx.Response(
+            404, json={"error": "not_found", "message": "project 'OPS' not found"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "create", "--project", "OPS", "--title", "T"])
@@ -116,17 +171,31 @@ def test_issues_update_happy(monkeypatch):
         body = json.loads(request.content.decode())
         assert body["status"] == "in_progress"
         assert body["priority"] == "high"
-        return httpx.Response(200, json={"id": 42, "title": "T", "status": "in_progress", "priority": "high", "labels": []}, request=request)
+        return httpx.Response(
+            200,
+            json={
+                "id": 42,
+                "title": "T",
+                "status": "in_progress",
+                "priority": "high",
+                "labels": [],
+            },
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
-    result = runner.invoke(app, ["issues", "update", "42", "--status", "in_progress", "--priority", "high"])
+    result = runner.invoke(
+        app, ["issues", "update", "42", "--status", "in_progress", "--priority", "high"]
+    )
     assert result.exit_code == 0
     assert "in_progress" in result.output
 
 
 def test_issues_update_400(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(400, json={"error": "bad_request", "message": "invalid status 'bad'"}, request=request)
+        return httpx.Response(
+            400, json={"error": "bad_request", "message": "invalid status 'bad'"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "update", "42", "--status", "bad"])
@@ -138,7 +207,9 @@ def test_issues_label_happy(monkeypatch):
     def handler(request: httpx.Request):
         assert request.method == "POST"
         assert request.url.path == "/api/v1/issues/42/labels/bug"
-        return httpx.Response(200, json={"id": 42, "labels": [{"id": 1, "name": "bug"}]}, request=request)
+        return httpx.Response(
+            200, json={"id": 42, "labels": [{"id": 1, "name": "bug"}]}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "label", "42", "bug"])
@@ -159,7 +230,9 @@ def test_issues_unlabel_happy(monkeypatch):
 
 def test_issues_label_404(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(404, json={"error": "not_found", "message": "label 'bug' not found"}, request=request)
+        return httpx.Response(
+            404, json={"error": "not_found", "message": "label 'bug' not found"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "label", "42", "bug"])
@@ -169,7 +242,11 @@ def test_issues_label_404(monkeypatch):
 
 def test_issues_unlabel_404(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(404, json={"error": "not_found", "message": "label 'bug' not attached to issue 42"}, request=request)
+        return httpx.Response(
+            404,
+            json={"error": "not_found", "message": "label 'bug' not attached to issue 42"},
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "unlabel", "42", "bug"])

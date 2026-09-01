@@ -26,11 +26,11 @@ def test_create_and_attach_detach_label(client):
 
     r = client.post(f"/api/v1/issues/{iid}/labels/bug")
     assert r.status_code == 200
-    assert any(l["name"] == "bug" for l in r.get_json()["labels"])
+    assert any(label["name"] == "bug" for label in r.get_json()["labels"])
 
     r = client.delete(f"/api/v1/issues/{iid}/labels/bug")
     assert r.status_code == 200
-    assert not any(l["name"] == "bug" for l in r.get_json()["labels"])
+    assert not any(label["name"] == "bug" for label in r.get_json()["labels"])
 
 
 def test_duplicate_label_returns_409(client):

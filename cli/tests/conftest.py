@@ -4,7 +4,6 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-from hiss.main import app as hiss_app
 import hiss.client
 
 
@@ -35,7 +34,9 @@ def mock_client(monkeypatch):
             if base_url is None:
                 base_url = hiss.client.get_base_url_for_ctx(ctx)
             if expected_base_url is not None:
-                assert base_url == expected_base_url, f"base_url {base_url} != expected {expected_base_url}"
+                assert base_url == expected_base_url, (
+                    f"base_url {base_url} != expected {expected_base_url}"
+                )
             captured["base_url"] = base_url
             # need to expose last request url for assertions; handler can capture itself
             return httpx.Client(transport=transport, base_url=base_url, timeout=10.0)

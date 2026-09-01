@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, current_app
+from flask import Flask, current_app
 from sqlalchemy import text as sa_text
 
 from ..extensions import db

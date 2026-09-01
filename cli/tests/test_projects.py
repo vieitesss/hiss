@@ -26,7 +26,9 @@ def test_projects_list_table(monkeypatch):
     def handler(request: httpx.Request):
         assert request.method == "GET"
         assert request.url.path == "/api/v1/projects"
-        return httpx.Response(200, json=[{"id": 1, "key": "OPS", "name": "Operations"}], request=request)
+        return httpx.Response(
+            200, json=[{"id": 1, "key": "OPS", "name": "Operations"}], request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["projects", "list"])
@@ -39,7 +41,9 @@ def test_projects_list_table(monkeypatch):
 
 def test_projects_list_json(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(200, json=[{"id": 1, "key": "OPS", "name": "Operations"}], request=request)
+        return httpx.Response(
+            200, json=[{"id": 1, "key": "OPS", "name": "Operations"}], request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["projects", "list", "--json"])
@@ -66,7 +70,9 @@ def test_projects_create_happy(monkeypatch):
         assert request.url.path == "/api/v1/projects"
         body = json.loads(request.content.decode())
         assert body == {"key": "OPS", "name": "Operations"}
-        return httpx.Response(201, json={"id": 1, "key": "OPS", "name": "Operations"}, request=request)
+        return httpx.Response(
+            201, json={"id": 1, "key": "OPS", "name": "Operations"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["projects", "create", "--key", "OPS", "--name", "Operations"])
@@ -76,10 +82,14 @@ def test_projects_create_happy(monkeypatch):
 
 def test_projects_create_json(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(201, json={"id": 1, "key": "OPS", "name": "Operations"}, request=request)
+        return httpx.Response(
+            201, json={"id": 1, "key": "OPS", "name": "Operations"}, request=request
+        )
 
     _mock(monkeypatch, handler)
-    result = runner.invoke(app, ["projects", "create", "--key", "OPS", "--name", "Operations", "--json"])
+    result = runner.invoke(
+        app, ["projects", "create", "--key", "OPS", "--name", "Operations", "--json"]
+    )
     assert result.exit_code == 0
     data = json.loads(result.stdout)
     assert data["key"] == "OPS"
@@ -87,7 +97,11 @@ def test_projects_create_json(monkeypatch):
 
 def test_projects_create_409(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(409, json={"error": "conflict", "message": "project key 'OPS' already exists"}, request=request)
+        return httpx.Response(
+            409,
+            json={"error": "conflict", "message": "project key 'OPS' already exists"},
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["projects", "create", "--key", "OPS", "--name", "Operations"])
@@ -97,7 +111,9 @@ def test_projects_create_409(monkeypatch):
 
 def test_projects_create_400(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(400, json={"error": "bad_request", "message": "key is required"}, request=request)
+        return httpx.Response(
+            400, json={"error": "bad_request", "message": "key is required"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["projects", "create", "--key", "", "--name", "Operations"])

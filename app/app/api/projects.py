@@ -2,7 +2,7 @@ from flask import request, jsonify
 from sqlalchemy.exc import IntegrityError
 
 from . import api_bp
-from .errors import bad_request, not_found, conflict
+from .errors import bad_request, conflict
 from ..extensions import db
 from ..models import Project
 
@@ -23,7 +23,9 @@ def create_project():
     if data is None:
         return bad_request("invalid JSON body")
     key = (data.get("key") or "").strip() if isinstance(data.get("key"), str) else data.get("key")
-    name = (data.get("name") or "").strip() if isinstance(data.get("name"), str) else data.get("name")
+    name = (
+        (data.get("name") or "").strip() if isinstance(data.get("name"), str) else data.get("name")
+    )
 
     # Validate required fields
     if not key or not isinstance(key, str):

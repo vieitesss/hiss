@@ -1,6 +1,3 @@
-import os
-
-
 def test_healthz_returns_200(client):
     r = client.get("/healthz")
     assert r.status_code == 200

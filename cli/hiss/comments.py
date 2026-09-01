@@ -30,7 +30,9 @@ def list_comments(
             typer.echo("No Comments found.")
         else:
             headers = ["id", "body", "created_at"]
-            rows = [[c.get("id", ""), c.get("body", ""), c.get("created_at", "") or ""] for c in data]
+            rows = [
+                [c.get("id", ""), c.get("body", ""), c.get("created_at", "") or ""] for c in data
+            ]
             print_table(headers, rows, title=f"Comments for Issue {issue_id}")
 
 

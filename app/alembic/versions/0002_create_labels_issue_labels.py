@@ -7,6 +7,7 @@ Create Date: 2025-09-01
 Teaching demo: labels arrive in v1.1.0 as a backward-compatible addition.
 Does not alter existing tables — purely additive.
 """
+
 from typing import Sequence, Union
 
 from alembic import op

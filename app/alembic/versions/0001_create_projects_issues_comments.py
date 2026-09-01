@@ -7,6 +7,7 @@ Create Date: 2025-09-01
 Teaching demo: first migration contains the core domain (Project/Issue/Comment).
 No labels yet — those arrive in 0002 as a backward-compatible addition.
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -18,12 +19,8 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 # Enum types — native Postgres enums with explicit names
-issue_status_enum = sa.Enum(
-    "open", "in_progress", "done", name="issue_status", native_enum=True
-)
-issue_priority_enum = sa.Enum(
-    "low", "medium", "high", name="issue_priority", native_enum=True
-)
+issue_status_enum = sa.Enum("open", "in_progress", "done", name="issue_status", native_enum=True)
+issue_priority_enum = sa.Enum("low", "medium", "high", name="issue_priority", native_enum=True)
 
 
 def upgrade() -> None:

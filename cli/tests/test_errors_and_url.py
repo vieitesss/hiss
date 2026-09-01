@@ -24,7 +24,9 @@ def _mock(monkeypatch, handler):
 
 def test_error_400_mapping(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(400, json={"error": "bad_request", "message": "invalid priority 'bad'"}, request=request)
+        return httpx.Response(
+            400, json={"error": "bad_request", "message": "invalid priority 'bad'"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "update", "42", "--priority", "bad"])
@@ -36,7 +38,9 @@ def test_error_400_mapping(monkeypatch):
 
 def test_error_404_mapping(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(404, json={"error": "not_found", "message": "project 'OPS' not found"}, request=request)
+        return httpx.Response(
+            404, json={"error": "not_found", "message": "project 'OPS' not found"}, request=request
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "create", "--project", "OPS", "--title", "T"])
@@ -46,7 +50,11 @@ def test_error_404_mapping(monkeypatch):
 
 def test_error_409_mapping(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(409, json={"error": "conflict", "message": "project key 'OPS' already exists"}, request=request)
+        return httpx.Response(
+            409,
+            json={"error": "conflict", "message": "project key 'OPS' already exists"},
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["projects", "create", "--key", "OPS", "--name", "Operations"])
@@ -145,7 +153,9 @@ def test_flag_trailing_slash(monkeypatch):
 
 def test_table_vs_json_projects(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(200, json=[{"id": 1, "key": "OPS", "name": "Operations"}], request=request)
+        return httpx.Response(
+            200, json=[{"id": 1, "key": "OPS", "name": "Operations"}], request=request
+        )
 
     _mock(monkeypatch, handler)
     # table
@@ -173,7 +183,11 @@ def test_table_vs_json_projects(monkeypatch):
 
 def test_table_vs_json_issues(monkeypatch):
     def handler(request: httpx.Request):
-        return httpx.Response(200, json=[{"id": 1, "title": "T", "status": "open", "priority": "medium", "labels": []}], request=request)
+        return httpx.Response(
+            200,
+            json=[{"id": 1, "title": "T", "status": "open", "priority": "medium", "labels": []}],
+            request=request,
+        )
 
     _mock(monkeypatch, handler)
     result = runner.invoke(app, ["issues", "list", "--project", "OPS"])

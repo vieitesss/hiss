@@ -39,6 +39,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.config["FEATURE_LABEL_FILTERING"] = _parse_feature_flag(
         os.getenv("FEATURE_LABEL_FILTERING", "true")
     )
+
     # Flask-SQLAlchemy expects SQLALCHEMY_DATABASE_URI.
     # Translate bare "postgresql://" / "postgres://" to "postgresql+psycopg://"
     # so the psycopg (v3) driver is used (psycopg2 not available on Python 3.14).
