@@ -135,9 +135,13 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     register_probes(app)
 
-    # HTML UI at root (Node 5) — thin server-rendered demo surface
-    from .ui import ui_bp
-
-    app.register_blueprint(ui_bp)
+    # Serve Single Page Application at root and non-API paths
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def serve_spa(path: str):
+        # Exclude probe routes and API routes from SPA fallback (they are handled elsewhere or 404'd)
+        if path.startswith("api/") or path in ("healthz", "readyz", "version"):
+            return jsonify({"error": "not_found", "message": "not found"}), 404
+        return app.send_static_file("index.html")
 
     return app

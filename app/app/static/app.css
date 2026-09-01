@@ -1,0 +1,178 @@
+:root {
+  --hiss-bg: #0d1117;
+  --hiss-surface: #161b22;
+  --hiss-surface-border: #30363d;
+  --hiss-text: #c9d1d9;
+  --hiss-text-heading: #f0f6fc;
+  --hiss-text-muted: #8b949e;
+  --hiss-accent: #58a6ff;
+  --hiss-accent-hover: #79c0ff;
+}
+
+body {
+  background-color: var(--hiss-bg);
+  color: var(--hiss-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  min-height: 100vh;
+}
+
+/* Navbar */
+.navbar-custom {
+  background-color: var(--hiss-surface);
+  border-bottom: 1px solid var(--hiss-surface-border);
+}
+
+.brand-logo {
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--hiss-text-heading) !important;
+}
+
+.brand-logo span {
+  color: var(--hiss-accent);
+}
+
+/* Cards & Panels */
+.card-custom {
+  background-color: var(--hiss-surface);
+  border: 1px solid var(--hiss-surface-border);
+  border-radius: 8px;
+}
+
+.card-custom .card-header {
+  background-color: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--hiss-surface-border);
+  color: var(--hiss-text-heading);
+}
+
+/* Forms & Inputs */
+.form-control-dark,
+.form-select-dark {
+  background-color: #090d13;
+  border: 1px solid var(--hiss-surface-border);
+  color: var(--hiss-text-heading);
+}
+
+.form-control-dark:focus,
+.form-select-dark:focus {
+  background-color: #090d13;
+  border-color: var(--hiss-accent);
+  color: var(--hiss-text-heading);
+  box-shadow: 0 0 0 0.25rem rgba(88, 166, 255, 0.2);
+}
+
+.form-control-dark::placeholder {
+  color: var(--hiss-text-muted);
+}
+
+/* Project Sidebar / List Items */
+.project-item {
+  transition: all 0.15s ease;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+
+.project-item:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.project-item.active {
+  background-color: rgba(88, 166, 255, 0.1);
+  border-left-color: var(--hiss-accent);
+}
+
+/* Issue List Rows */
+.issue-row {
+  border-bottom: 1px solid var(--hiss-surface-border);
+  transition: background-color 0.15s ease;
+}
+
+.issue-row:last-child {
+  border-bottom: none;
+}
+
+.issue-row:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Badges & Pills */
+.badge-status-open {
+  background-color: rgba(46, 160, 67, 0.15);
+  color: #3fb950;
+  border: 1px solid rgba(46, 160, 67, 0.4);
+}
+
+.badge-status-in_progress {
+  background-color: rgba(210, 153, 34, 0.15);
+  color: #d29922;
+  border: 1px solid rgba(210, 153, 34, 0.4);
+}
+
+.badge-status-done {
+  background-color: rgba(163, 113, 247, 0.15);
+  color: #a371f7;
+  border: 1px solid rgba(163, 113, 247, 0.4);
+}
+
+.badge-priority-low {
+  background-color: rgba(139, 148, 158, 0.15);
+  color: #8b949e;
+  border: 1px solid rgba(139, 148, 158, 0.4);
+}
+
+.badge-priority-medium {
+  background-color: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+  border: 1px solid rgba(88, 166, 255, 0.4);
+}
+
+.badge-priority-high {
+  background-color: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, 0.4);
+}
+
+.label-pill {
+  font-size: 0.75rem;
+  padding: 0.2em 0.6em;
+  border-radius: 2em;
+  background-color: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.label-pill .btn-close-custom {
+  background: none;
+  border: none;
+  color: #8b949e;
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.label-pill .btn-close-custom:hover {
+  color: #f85149;
+}
+
+/* Modals */
+.modal-custom .modal-content {
+  background-color: var(--hiss-surface);
+  border: 1px solid var(--hiss-surface-border);
+  color: var(--hiss-text);
+}
+
+.modal-custom .modal-header,
+.modal-custom .modal-footer {
+  border-color: var(--hiss-surface-border);
+}
+
+/* Comments */
+.comment-box {
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--hiss-surface-border);
+  border-radius: 6px;
+}
