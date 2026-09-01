@@ -1,0 +1,99 @@
+name: CD — dev
+
+# Safety invariant: this workflow deploys only owner-controlled pushes to main.
+# Never add pull_request: untrusted fork code must not execute on the self-hosted runner.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cd-dev
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Resolve dev image tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Set 8-character SHA tag
+        id: tag
+        shell: bash
+        run: echo "tag=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and push dev image
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          push: true
+          tags: ghcr.io/vieitesss/hiss:${{ needs.prepare.outputs.tag }}
+
+  deploy:
+    name: Deploy dev
+    needs:
+      - prepare
+      - build
+    runs-on: [self-hosted]
+    timeout-minutes: 15
+    environment:
+      name: dev
+    env:
+      DEPLOY_TAG: ${{ needs.prepare.outputs.tag }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Pull dev image
+        shell: bash
+        run: |
+          set -euo pipefail
+          POSTGRES_PASSWORD="$POSTGRES_PASSWORD" IMAGE_TAG="$DEPLOY_TAG" APP_VERSION="$DEPLOY_TAG" \
+            docker compose -f deploy/compose.yml --env-file deploy/dev.env -p hiss-dev pull
+      - name: Start dev services
+        shell: bash
+        run: |
+          set -euo pipefail
+          POSTGRES_PASSWORD="$POSTGRES_PASSWORD" IMAGE_TAG="$DEPLOY_TAG" APP_VERSION="$DEPLOY_TAG" \
+            docker compose -f deploy/compose.yml --env-file deploy/dev.env -p hiss-dev up -d
+
+  smoke-test:
+    name: Smoke test dev
+    needs:
+      - prepare
+      - deploy
+    runs-on: [self-hosted]
+    timeout-minutes: 5
+    env:
+      DEPLOY_TAG: ${{ needs.prepare.outputs.tag }}
+      BASE_URL: http://localhost:8001
+    steps:
+      - name: Check dev probes and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 10 --retry 10 --retry-delay 2 --retry-connrefused "$BASE_URL/healthz"
+          curl --fail --silent --show-error --max-time 10 --retry 10 --retry-delay 2 --retry-connrefused "$BASE_URL/readyz"
+          curl --fail --silent --show-error --max-time 10 --retry 10 --retry-delay 2 --retry-connrefused "$BASE_URL/version" \
+            | jq --exit-status --arg expected "$DEPLOY_TAG" '.version == $expected' >/dev/null
