@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Project {{ project.key }} — {{ project.name }}</h2>
+<p><a href="{{ url_for('ui.index') }}">&larr; Back to projects</a></p>
+
+<h3>Issues</h3>
+
+<form method="get" action="{{ url_for('ui.project_issues', key=project.key) }}" class="filter-bar">
+  <label>Status:
+    <select name="status">
+      <option value="">(any)</option>
+      {% for s in all_statuses %}
+        <option value="{{ s }}" {% if s == status_filter %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Priority:
+    <select name="priority">
+      <option value="">(any)</option>
+      {% for pr in all_priorities %}
+        <option value="{{ pr }}" {% if pr == priority_filter %}selected{% endif %}>{{ pr }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Label: <input name="label" value="{{ label_filter }}" placeholder="bug"></label>
+  <button type="submit">Filter</button>
+  {% if status_filter or priority_filter or label_filter %}
+    <a href="{{ url_for('ui.project_issues', key=project.key) }}">Clear</a>
+  {% endif %}
+</form>
+
+{% if issues %}
+  <table>
+    <tr><th>ID</th><th>Title</th><th>Status</th><th>Priority</th><th>Labels</th></tr>
+    {% for iss in issues %}
+      <tr>
+        <td><a href="{{ url_for('ui.issue_detail', issue_id=iss.id) }}">{{ iss.id }}</a></td>
+        <td><a href="{{ url_for('ui.issue_detail', issue_id=iss.id) }}">{{ iss.title }}</a></td>
+        <td><span class="badge badge-status-{{ iss.status.value if iss.status.value is defined else iss.status }}">{{ iss.status.value if iss.status.value is defined else iss.status }}</span></td>
+        <td><span class="badge badge-priority-{{ iss.priority.value if iss.priority.value is defined else iss.priority }}">{{ iss.priority.value if iss.priority.value is defined else iss.priority }}</span></td>
+        <td>
+          {% for lb in iss.labels %}
+            <span class="pill">{{ lb.name }}</span>
+          {% endfor %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p class="empty">No issues yet.</p>
+{% endif %}
+
+<h3>Create Issue</h3>
+<form method="post" action="{{ url_for('ui.create_issue', key=project.key) }}">
+  <label>Title: <input name="title" required placeholder="Fix bug"></label><br>
+  <label>Description: <textarea name="description" placeholder="Details"></textarea></label><br>
+  <label>Priority:
+    <select name="priority">
+      <option value="low">low</option>
+      <option value="medium" selected>medium</option>
+      <option value="high">high</option>
+    </select>
+  </label><br>
+  <button type="submit">Create Issue</button>
+</form>
+{% endblock %}

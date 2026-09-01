@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Projects</h2>
+
+{% if projects %}
+  <ul>
+  {% for p in projects %}
+    <li><a href="{{ url_for('ui.project_issues', key=p.key) }}">{{ p.key }} — {{ p.name }}</a></li>
+  {% endfor %}
+  </ul>
+{% else %}
+  <p class="empty">No projects yet.</p>
+{% endif %}
+
+<h3>Create Project</h3>
+<form method="post" action="{{ url_for('ui.create_project') }}">
+  <label>Key: <input name="key" required placeholder="DEMO"></label><br>
+  <label>Name: <input name="name" required placeholder="Demo Project"></label><br>
+  <button type="submit">Create Project</button>
+</form>
+{% endblock %}
