@@ -54,3 +54,23 @@ def create_label(
         headers = ["id", "name"]
         rows = [[data.get("id", ""), data.get("name", "")]]
         print_table(headers, rows, title="Created Label")
+
+
+@labels_app.command("delete")
+def delete_label(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Label name"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Delete a Label (detaches it from all Issues)."""
+    base_url = hiss.client.get_base_url_for_ctx(ctx)
+    try:
+        with hiss.client.get_client(ctx) as client:
+            resp = client.delete(f"/api/v1/labels/{name}")
+    except httpx.RequestError as exc:
+        hiss.client.handle_request_error(exc, base_url)
+    data = hiss.client.handle_response(resp)
+    if json_output:
+        print_json(data if data is not None else {"name": name, "deleted": True})
+    else:
+        typer.echo(f"Deleted Label {name}")

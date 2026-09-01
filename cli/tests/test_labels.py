@@ -99,3 +99,27 @@ def test_labels_create_400(monkeypatch):
     # Our mock always returns 400, so check mapping
     assert result.exit_code == 1
     assert "name is required" in result.output
+
+
+def test_labels_delete_happy(monkeypatch):
+    def handler(request: httpx.Request):
+        assert request.method == "DELETE"
+        assert request.url.path == "/api/v1/labels/bug"
+        return httpx.Response(204, request=request)
+
+    _mock(monkeypatch, handler)
+    result = runner.invoke(app, ["labels", "delete", "bug"])
+    assert result.exit_code == 0
+    assert "Deleted Label bug" in result.output
+
+
+def test_labels_delete_404(monkeypatch):
+    def handler(request: httpx.Request):
+        return httpx.Response(
+            404, json={"error": "not_found", "message": "label 'bug' not found"}, request=request
+        )
+
+    _mock(monkeypatch, handler)
+    result = runner.invoke(app, ["labels", "delete", "bug"])
+    assert result.exit_code == 1
+    assert "label 'bug' not found" in result.output

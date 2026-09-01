@@ -140,6 +140,26 @@ def update_issue(
         print_table(headers, rows, title=f"Updated Issue {issue_id}")
 
 
+@issues_app.command("delete")
+def delete_issue(
+    ctx: typer.Context,
+    issue_id: int = typer.Argument(..., help="Issue ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Delete an Issue (cascades its Comments)."""
+    base_url = hiss.client.get_base_url_for_ctx(ctx)
+    try:
+        with hiss.client.get_client(ctx) as client:
+            resp = client.delete(f"/api/v1/issues/{issue_id}")
+    except httpx.RequestError as exc:
+        hiss.client.handle_request_error(exc, base_url)
+    data = hiss.client.handle_response(resp)
+    if json_output:
+        print_json(data if data is not None else {"id": issue_id, "deleted": True})
+    else:
+        typer.echo(f"Deleted Issue {issue_id}")
+
+
 @issues_app.command("label")
 def label_issue(
     ctx: typer.Context,

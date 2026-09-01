@@ -123,3 +123,27 @@ def test_projects_create_400(monkeypatch):
     # We'll simulate 400 for any create
     assert result.exit_code == 1
     assert "key is required" in result.output
+
+
+def test_projects_delete_happy(monkeypatch):
+    def handler(request: httpx.Request):
+        assert request.method == "DELETE"
+        assert request.url.path == "/api/v1/projects/OPS"
+        return httpx.Response(204, request=request)
+
+    _mock(monkeypatch, handler)
+    result = runner.invoke(app, ["projects", "delete", "OPS"])
+    assert result.exit_code == 0
+    assert "Deleted Project OPS" in result.output
+
+
+def test_projects_delete_404(monkeypatch):
+    def handler(request: httpx.Request):
+        return httpx.Response(
+            404, json={"error": "not_found", "message": "project 'OPS' not found"}, request=request
+        )
+
+    _mock(monkeypatch, handler)
+    result = runner.invoke(app, ["projects", "delete", "OPS"])
+    assert result.exit_code == 1
+    assert "project 'OPS' not found" in result.output

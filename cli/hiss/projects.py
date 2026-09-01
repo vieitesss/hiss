@@ -55,3 +55,23 @@ def create_project(
         headers = ["id", "key", "name"]
         rows = [[data.get("id", ""), data.get("key", ""), data.get("name", "")]]
         print_table(headers, rows, title="Created Project")
+
+
+@projects_app.command("delete")
+def delete_project(
+    ctx: typer.Context,
+    key: str = typer.Argument(..., help="Project key"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Delete a Project (cascades its Issues and Comments)."""
+    base_url = hiss.client.get_base_url_for_ctx(ctx)
+    try:
+        with hiss.client.get_client(ctx) as client:
+            resp = client.delete(f"/api/v1/projects/{key}")
+    except httpx.RequestError as exc:
+        hiss.client.handle_request_error(exc, base_url)
+    data = hiss.client.handle_response(resp)
+    if json_output:
+        print_json(data if data is not None else {"key": key, "deleted": True})
+    else:
+        typer.echo(f"Deleted Project {key}")

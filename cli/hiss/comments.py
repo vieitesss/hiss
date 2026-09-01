@@ -58,3 +58,46 @@ def add_comment(
         headers = ["id", "body", "created_at"]
         rows = [[data.get("id", ""), data.get("body", ""), data.get("created_at", "") or ""]]
         print_table(headers, rows, title=f"Created Comment for Issue {issue_id}")
+
+
+@comments_app.command("update")
+def update_comment(
+    ctx: typer.Context,
+    comment_id: int = typer.Argument(..., help="Comment ID"),
+    body: str = typer.Option(..., "--body", help="New comment body"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Update a Comment's body."""
+    base_url = hiss.client.get_base_url_for_ctx(ctx)
+    try:
+        with hiss.client.get_client(ctx) as client:
+            resp = client.patch(f"/api/v1/comments/{comment_id}", json={"body": body})
+    except httpx.RequestError as exc:
+        hiss.client.handle_request_error(exc, base_url)
+    data = hiss.client.handle_response(resp)
+    if json_output:
+        print_json(data)
+    else:
+        headers = ["id", "body", "created_at"]
+        rows = [[data.get("id", ""), data.get("body", ""), data.get("created_at", "") or ""]]
+        print_table(headers, rows, title=f"Updated Comment {comment_id}")
+
+
+@comments_app.command("delete")
+def delete_comment(
+    ctx: typer.Context,
+    comment_id: int = typer.Argument(..., help="Comment ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Delete a Comment."""
+    base_url = hiss.client.get_base_url_for_ctx(ctx)
+    try:
+        with hiss.client.get_client(ctx) as client:
+            resp = client.delete(f"/api/v1/comments/{comment_id}")
+    except httpx.RequestError as exc:
+        hiss.client.handle_request_error(exc, base_url)
+    data = hiss.client.handle_response(resp)
+    if json_output:
+        print_json(data if data is not None else {"id": comment_id, "deleted": True})
+    else:
+        typer.echo(f"Deleted Comment {comment_id}")

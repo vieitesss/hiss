@@ -203,6 +203,30 @@ def test_issues_update_400(monkeypatch):
     assert "invalid status" in result.output
 
 
+def test_issues_delete_happy(monkeypatch):
+    def handler(request: httpx.Request):
+        assert request.method == "DELETE"
+        assert request.url.path == "/api/v1/issues/42"
+        return httpx.Response(204, request=request)
+
+    _mock(monkeypatch, handler)
+    result = runner.invoke(app, ["issues", "delete", "42"])
+    assert result.exit_code == 0
+    assert "Deleted Issue 42" in result.output
+
+
+def test_issues_delete_404(monkeypatch):
+    def handler(request: httpx.Request):
+        return httpx.Response(
+            404, json={"error": "not_found", "message": "issue 42 not found"}, request=request
+        )
+
+    _mock(monkeypatch, handler)
+    result = runner.invoke(app, ["issues", "delete", "42"])
+    assert result.exit_code == 1
+    assert "issue 42 not found" in result.output
+
+
 def test_issues_label_happy(monkeypatch):
     def handler(request: httpx.Request):
         assert request.method == "POST"

@@ -125,3 +125,45 @@ def test_comments_add_404(monkeypatch):
     result = runner.invoke(app, ["comments", "add", "42", "hi"])
     assert result.exit_code == 1
     assert "issue 42 not found" in result.output
+
+
+def test_comments_update_happy(monkeypatch):
+    def handler(request: httpx.Request):
+        assert request.method == "PATCH"
+        assert request.url.path == "/api/v1/comments/7"
+        body = json.loads(request.content.decode())
+        assert body == {"body": "edited"}
+        return httpx.Response(
+            200,
+            json={"id": 7, "issue_id": 42, "body": "edited", "created_at": "2024-01-01T00:00:00"},
+            request=request,
+        )
+
+    _mock(monkeypatch, handler)
+    result = runner.invoke(app, ["comments", "update", "7", "--body", "edited"])
+    assert result.exit_code == 0
+    assert "edited" in result.output
+
+
+def test_comments_delete_happy(monkeypatch):
+    def handler(request: httpx.Request):
+        assert request.method == "DELETE"
+        assert request.url.path == "/api/v1/comments/7"
+        return httpx.Response(204, request=request)
+
+    _mock(monkeypatch, handler)
+    result = runner.invoke(app, ["comments", "delete", "7"])
+    assert result.exit_code == 0
+    assert "Deleted Comment 7" in result.output
+
+
+def test_comments_delete_404(monkeypatch):
+    def handler(request: httpx.Request):
+        return httpx.Response(
+            404, json={"error": "not_found", "message": "comment 7 not found"}, request=request
+        )
+
+    _mock(monkeypatch, handler)
+    result = runner.invoke(app, ["comments", "delete", "7"])
+    assert result.exit_code == 1
+    assert "comment 7 not found" in result.output
