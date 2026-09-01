@@ -1,8 +1,114 @@
 # hiss
 
-Un gestor de issues mínimo y autoalojable (Flask + Postgres + API REST + CLI), construido como material docente para un curso de CI/CD con GitHub Actions y Docker.
+Un gestor de issues mínimo y autoalojable (Flask + Postgres + API REST + CLI), construido como material docente para un curso de CI/CD con GitHub Actions y Docker. Todo el código y los identificadores están en inglés; toda la documentación en español.
 
-> Repo en construcción — ver los issues para el plan de implementación y `CONTEXT.md` para el glosario de dominio.
+[![CI](https://github.com/vieitesss/hiss/actions/workflows/ci.yml/badge.svg)](https://github.com/vieitesss/hiss/actions/workflows/ci.yml)
+
+> Ver [`CONTEXT.md`](CONTEXT.md) para el glosario de dominio (`Project`, `Issue`, `Label`, `Comment`, `Environment`, `Release Tag`, `Feature Flag`, `Edge Build`).
+
+## Arquitectura
+
+```mermaid
+flowchart TB
+    GH["GitHub Actions<br/>ci.yml (ubuntu-latest)<br/>cd-dev / cd-staging / cd-prod<br/>_build-push.yml (reusable)<br/>rollback.yml (workflow_dispatch)"]
+    GH -->|"build & push<br/>ghcr.io/vieitesss/hiss:TAG"| REG["GHCR<br/>ghcr.io/vieitesss/hiss<br/>público, pull anónimo"]
+
+    REG --> DEV["hiss-dev :8001<br/>app (8000 interno) + db postgres:17-alpine<br/>COMPOSE_PROJECT_NAME=hiss-dev"]
+    REG --> STAG["hiss-staging :8002<br/>app + db postgres:17-alpine<br/>hiss-staging"]
+    REG --> PROD["hiss-prod :8003<br/>app + db postgres:17-alpine<br/>hiss-prod + gate prod"]
+
+    DEV --> DBD[("pgdata dev<br/>volumen")]
+    STAG --> DBS[("pgdata staging")]
+    PROD --> DBP[("pgdata prod")]
+
+    REG -.->|"tags BLUE_TAG / GREEN_TAG"| BG["deploy/blue-green :9000<br/>blue + green + proxy nginx:1.27-alpine<br/>postgres:16-alpine compartido<br/>COMPOSE_PROJECT_NAME=hiss-blue-green"]
+
+    DEV --- NET["red interna db:5432<br/>5432 no publicado en host"]
+    STAG --- NET
+    PROD --- NET
+    BG --- NET2["red blue-green db:5432"]
+
+    classDef env fill:#e3f2fd,stroke:#1565c0
+    class DEV,STAG,PROD env
+    classDef demo fill:#fff3e0,stroke:#ef6c00
+    class BG demo
+```
+
+Cada Environment (`dev` `:8001`, `staging` `:8002`, `prod` `:8003`) usa el mismo `deploy/compose.yml` con distinto `--env-file`. El servidor Flask de desarrollo corre en `8000` (`flask --app app.app:create_app run --port 8000`) y no colisiona con ningún Environment. `5432` nunca se publica en el host.
+
+## Inicio rápido en 5 minutos
+
+Requisito: runner autoalojado en `Idle` (ver [`docs/setup.md`](docs/setup.md)).
+
+```sh
+# 0. Verifica el runner (debe mostrar Idle en Settings → Actions → Runners)
+gh api /repos/vieitesss/hiss/actions/runners --jq '.runners[] | "\(.name) \(.status)"'
+
+# 1. Runner ya escuchando (./run.sh o svc.sh start) — si no, levántalo:
+# cd ~/actions-runner && ./run.sh
+
+# 2. Corta un snapshot desde main y observa staging en :8002
+git checkout main && git pull --ff-only origin main
+git tag 0.2.0-snapshot && git push origin 0.2.0-snapshot
+gh run list --workflow cd-staging.yml --limit 3
+gh run watch --exit-status
+curl --fail http://localhost:8002/healthz | jq .
+curl --fail http://localhost:8002/version | jq .  # {"version":"0.2.0-snapshot"}
+
+# 3. Promueve a release inmutable y aprueba prod en :8003
+git tag 0.2.0 && git push origin 0.2.0
+gh run list --workflow cd-prod.yml --limit 3
+# Abre Actions → CD — prod → Review pending deployments → Approve
+gh run watch --exit-status
+curl --fail http://localhost:8003/version | jq .  # {"version":"0.2.0"}
+
+# 4. Verifica dev en :8001 (cada push a main despliega SHA8)
+git commit --allow-empty -m "chore: quickstart check" && git push origin main
+gh run list --workflow cd-dev.yml --limit 3
+gh run watch --exit-status
+curl --fail http://localhost:8001/version | jq .  # {"version":"<SHA8>"}
+
+# 5. Observabilidad básica
+docker compose --env-file deploy/dev.env -p hiss-dev ps
+docker compose --env-file deploy/dev.env -p hiss-dev logs -f app
+curl --fail http://localhost:8001/readyz | jq .
+```
+
+Para desarrollo local sin Compose:
+
+```sh
+# Crea un venv, instala app/requirements.txt y corre Flask en 8000 (no 8001-8003)
+python -m venv .venv && source .venv/bin/activate
+pip install -r app/requirements.txt
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/hiss flask --app app.app:create_app run --port 8000
+# o con Postgres local en 5432, aplica migraciones: alembic -c app/alembic.ini upgrade head
+```
+
+## Documentación
+
+Índice completo — cada documento es autocontenido y enlaza a los demás:
+
+| Documento | Qué cubre |
+| --- | --- |
+| [`docs/setup.md`](docs/setup.md) | Configuración del repo, CI en `ci.yml`, protección de `main`, runner autoalojado paso a paso (macOS/Linux, `self-hosted`, `post-registration token` vía `gh api`), Environments `dev`/`staging`/`prod` con `POSTGRES_PASSWORD` y GHCR público |
+| [`docs/pipeline.md`](docs/pipeline.md) | Pipeline completo: `push`→`ci.yml` (`changes`/`lint`/`test-app` con `postgres:17-alpine`/`test-cli`/`build`) → `cd-dev.yml` (`SHA8`→`:8001`)/`cd-staging.yml` (`snapshot`→`:8002`)/`cd-prod.yml` (`X.Y.Z`→`:8003` gate) vía `_build-push.yml` (`workflow_call`), smoke tests `curl`+`jq --arg expected` |
+| [`docs/environments.md`](docs/environments.md) | 4 entornos del temario → 3 despliegues `hiss-dev:8001`/`hiss-staging:8002`/`hiss-prod:8003` + QA efímero (`test-app` service container `postgres:17-alpine`), tablas `IMAGE_TAG`/`APP_VERSION`/`FEATURE_LABEL_FILTERING`, `COMPOSE_PROJECT_NAME` |
+| [`docs/release-process.md`](docs/release-process.md) | Runbook `X.Y.Z-snapshot` móvil (`git tag -d`+`push --delete`+`git tag X.Y.Z-snapshot && git push`), endurecer, `X.Y.Z` inmutable, aprobar `prod`, `rollback.yml` |
+| [`docs/deployment-strategies.md`](docs/deployment-strategies.md) | Recreate / Rolling / Blue-Green / Canary con Mermaid, demo `deploy/blue-green/` en `:9000` (`switch.sh` `status`/`switch`/`deploy`/`rollback`, `curl :9000/version`), migración `0002` aditiva |
+| [`docs/secrets-and-config.md`](docs/secrets-and-config.md) | 12-factor, `deploy/*.env` versionados vs `POSTGRES_PASSWORD` inyectada (`secrets.POSTGRES_PASSWORD`), `FEATURE_LABEL_FILTERING` (`true`/`true`/`false`, `app/app/config.py`, `test_probes_version_flag.py`) |
+
+**Material para el profesor — `docs/teacher/` (teacher-only, no es parte del recorrido del alumno):**
+
+- [`docs/teacher/course-map.md`](docs/teacher/course-map.md) — mapa RA1–RA4 bullet-por-bullet a ficheros/workflows/demos
+- [`docs/teacher/workflow-refactor-lesson.md`](docs/teacher/workflow-refactor-lesson.md) — lección `workflows-duplicated` → `_build-push.yml` (`git show`, `git diff`)
+- [`docs/teacher/blue-green-guide.md`](docs/teacher/blue-green-guide.md) — guía para ejecutar la demo en clase (`demo-check.sh`, `BLUE_GREEN_PORT=9000`, `down -v`)
+
+**Decisiones de arquitectura — `docs/adr/`:**
+
+- [`docs/adr/0001-self-hosted-runner-environments.md`](docs/adr/0001-self-hosted-runner-environments.md) — runner `self-hosted` + Environments como CD (rechazadas: Watchtower, SSH, cloud)
+- [`docs/adr/0002-sin-autenticacion.md`](docs/adr/0002-sin-autenticacion.md) — sin autenticación por alcance docente (rechazadas: auth completa, API tokens)
+
+---
 
 ## Integración continua
 

@@ -115,6 +115,241 @@ curl a `/healthz` y `/readyz`, y comprueba que `/version`
    que el runner pueda hacer `pull` sin credenciales adicionales; los pushes
    usan el `GITHUB_TOKEN` del workflow con `packages: write`.
 
+Los tres puntos anteriores se detallan paso a paso a continuación. Si ya
+tienes un runner operativo, puedes saltar a [Rollback](#rollback).
+
+## Runner autoalojado — registro, instalación y operación
+
+Todos los despliegues de CD se ejecutan en un runner con etiqueta
+`self-hosted`. El runner debe vivir en la máquina donde quieres que corran
+`hiss-dev` en `8001`, `hiss-staging` en `8002` y `hiss-prod` en `8003`.
+Este flujo es idéntico si el repositorio es un fork tuyo; sustituye
+`vieitesss/hiss` por `tu-usuario/hiss` en los comandos.
+
+### Requisitos del host
+
+- **Docker Engine + Compose v2** — `docker compose version` debe mostrar v2.
+- **`curl` y `jq`** — necesarios para los smoke tests de los workflows
+  (`curl --fail .../healthz` y `jq --arg expected`). En macOS:
+  `brew install curl jq`; en Debian/Ubuntu:
+  `sudo apt-get update && sudo apt-get install -y curl jq`.
+- Sistema operativo soportado: **macOS (Intel o Apple Silicon)** y
+  **Linux x64** (Ubuntu 22.04/24.04, Debian 12, Fedora). `linux` no forma parte
+  de la etiqueta del runner, así que macOS funciona igual con
+  `runs-on: [self-hosted]`.
+
+### 1. Registrar el runner en GitHub
+
+**Opción A — interfaz web (recomendada la primera vez):**
+
+1. Abre tu fork en GitHub: `https://github.com/tu-usuario/hiss`.
+2. Ve a **Settings → Actions → Runners → New self-hosted runner**.
+3. Selecciona **Linux** o **macOS** y arquitectura (`x64` / `ARM64`).
+   GitHub muestra los comandos exactos de descarga y el token de registro.
+4. El token expira en una hora; si caduca, genera uno nuevo con
+   **New self-hosted runner** o vía API.
+
+**Opción B — token vía `gh` CLI (útil para automatizar o renovar):**
+
+```sh
+# Autentícate una vez contra tu fork
+gh auth login
+
+# Obtén un token de registro efímero (válido ~60 min)
+gh api --method POST /repos/tu-usuario/hiss/actions/runners/registration-token --jq .token
+# o, con el repo por defecto:
+gh api --method POST repos/vieitesss/hiss/actions/runners/registration-token --jq .token
+```
+
+Guarda el valor impreso como `REG_TOKEN`; lo usarás en `./config.sh`.
+
+### 2. Descargar, configurar y ejecutar
+
+Elige la pestaña de tu sistema:
+
+**Linux x64:**
+
+```sh
+mkdir -p ~/actions-runner && cd ~/actions-runner
+# Consulta la versión vigente en Settings → Actions → Runners; ejemplo v2.325.0:
+curl -o actions-runner-linux-x64-2.325.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.325.0/actions-runner-linux-x64-2.325.0.tar.gz
+tar xzf actions-runner-linux-x64-2.325.0.tar.gz
+
+# Configura (sustituye REG_TOKEN por el token real)
+./config.sh --url https://github.com/tu-usuario/hiss --token $REG_TOKEN --labels self-hosted --unattended
+
+# Ejecuta en primer plano (ideal para probar)
+./run.sh
+```
+
+**macOS Apple Silicon (ARM64):**
+
+```sh
+mkdir -p ~/actions-runner && cd ~/actions-runner
+curl -o actions-runner-osx-arm64-2.325.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.325.0/actions-runner-osx-arm64-2.325.0.tar.gz
+tar xzf actions-runner-osx-arm64-2.325.0.tar.gz
+./config.sh --url https://github.com/tu-usuario/hiss --token $REG_TOKEN --labels self-hosted --unattended
+./run.sh
+```
+
+**macOS Intel (x64):**
+
+```sh
+mkdir -p ~/actions-runner && cd ~/actions-runner
+curl -o actions-runner-osx-x64-2.325.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.325.0/actions-runner-osx-x64-2.325.0.tar.gz
+tar xzf actions-runner-osx-x64-2.325.0.tar.gz
+./config.sh --url https://github.com/tu-usuario/hiss --token $REG_TOKEN --labels self-hosted --unattended
+./run.sh
+```
+
+Para ejecutarlo como servicio en segundo plano:
+
+```sh
+# Instala y arranca el servicio
+sudo ./svc.sh install
+sudo ./svc.sh start
+# Verifica
+sudo ./svc.sh status
+# alternativa: deja ./run.sh en una terminal dedicada si prefieres no instalar servicio
+```
+
+En **macOS** `svc.sh` registra un servicio `launchd`; en **Linux** registra
+un servicio `systemd` (`actions.runner.*.service`). Tras la instalación el
+runner aparece en **Settings → Actions → Runners** como `Idle`.
+
+Verifica que Docker es accesible desde el runner:
+
+```sh
+docker compose version
+docker run --rm hello-world
+curl --version | head -1
+jq --version
+```
+
+> **Advertencia de seguridad — invariante del repositorio**
+>
+> Los workflows de despliegue `cd-dev.yml`, `cd-staging.yml`, `cd-prod.yml` y
+> `rollback.yml` declaran en su cabecera:
+>
+> ```yaml
+> # Safety invariant: this workflow deploys only owner-controlled pushes to main.
+> # Never add pull_request: untrusted fork code must not execute on the self-hosted runner.
+> ```
+>
+> **Nunca añadas `pull_request` como disparador de un job `runs-on: [self-hosted]`**.
+> Un runner autoalojado ejecuta código con acceso a tu máquina y a tus secretos
+> `POSTGRES_PASSWORD`; si aceptara PRs de forks, cualquier persona podría
+> robar secretos o comprometer el host. Esta es la razón por la que `ci.yml`
+> usa `ubuntu-latest` y los despliegues usan `self-hosted`.
+
+### 3. Detener, reiniciar y desinstalar
+
+```sh
+# Detener el servicio
+sudo ./svc.sh stop
+# Reiniciar
+sudo ./svc.sh start
+# Ver logs del servicio (Linux)
+journalctl -u actions.runner.*.service -f
+# Ver logs del servicio (macOS)
+launchctl list | grep actions.runner
+
+# Desinstalar completamente el runner de la máquina
+sudo ./svc.sh uninstall
+# Elimina el registro en GitHub (necesita un token de eliminación)
+REG_REMOVE_TOKEN=$(gh api --method POST /repos/tu-usuario/hiss/actions/runners/remove-token --jq .token)
+./config.sh remove --token $REG_REMOVE_TOKEN
+# o borra el directorio
+cd ~ && rm -rf ~/actions-runner
+```
+
+Si solo quieres pausar los despliegues sin desinstalar, detén el servicio con
+`sudo ./svc.sh stop` o termina `./run.sh` con `Ctrl+C`; GitHub mostrará el
+runner como `Offline` y los workflows quedarán encolados hasta que vuelva.
+
+## GitHub Environments y secretos
+
+Los tres despliegues usan el mismo `deploy/compose.yml` con distinto
+`--env-file`. El secreto `POSTGRES_PASSWORD` nunca se versiona; cada
+Environment lo inyecta en el runner.
+
+### Crear los tres Environments
+
+**Interfaz web:**
+
+1. Ve a **Settings → Environments → New environment**.
+2. Crea `dev`, luego `staging`, luego `prod` (nombres en minúsculas,
+   exactamente así: los workflows referencian `environment: dev|staging|prod`).
+3. En cada Environment, pulsa **Add environment secret** y añade
+   `POSTGRES_PASSWORD` con el mismo valor que usarás en local (por ejemplo
+   `elige-un-secreto-local`; en producción usa un secreto largo distinto
+   por Environment si lo prefieres, pero documenta cuál usas).
+4. Solo en `prod`: activa **Required reviewers** y añádete como revisor.
+   Esto hace que `cd-prod.yml` y `rollback.yml` hacia `prod` pausen hasta
+   tu aprobación — la diferencia entre Delivery y Deployment.
+
+**CLI con `gh`:**
+
+```sh
+# Crea los Environments (idempotente)
+gh api --method PUT /repos/tu-usuario/hiss/environments/dev
+gh api --method PUT /repos/tu-usuario/hiss/environments/staging
+gh api --method PUT /repos/tu-usuario/hiss/environments/prod
+
+# Añade el secreto a cada Environment (te pedirá el valor de forma interactiva)
+gh secret set POSTGRES_PASSWORD --env dev
+gh secret set POSTGRES_PASSWORD --env staging
+gh secret set POSTGRES_PASSWORD --env prod
+# Alternativa no interactiva (evita que quede en el historial):
+# printf 'elige-un-secreto-local' | gh secret set POSTGRES_PASSWORD --env dev --body -
+```
+
+Verifica:
+
+```sh
+gh api /repos/tu-usuario/hiss/environments --jq '.environments[].name'
+# Debe listar: dev, staging, prod
+gh secret list --env dev | grep POSTGRES_PASSWORD
+gh secret list --env staging | grep POSTGRES_PASSWORD
+gh secret list --env prod | grep POSTGRES_PASSWORD
+```
+
+### Probar que el secreto llega al runner
+
+Haz un `push` a `main` y observa `cd-dev.yml` en **Actions**; el job
+`Deploy dev` debe mostrar `environment: dev` y no fallar por
+`POSTGRES_PASSWORD must be set`. Si falla, revisa que el secreto existe en
+`dev` y que el runner está `Idle`.
+
+## Paquete GHCR en público
+
+Los workflows publican en `ghcr.io/vieitesss/hiss:<tag>` vía
+`.github/workflows/_build-push.yml` (`workflow_call` con `packages: write` y
+`docker/login-action` con `GITHUB_TOKEN`). El runner luego hace `pull`
+sin credenciales adicionales, por eso el paquete debe ser público.
+
+**Hacer el paquete público (solo el propietario del paquete):**
+
+1. Ve a `https://github.com/vieitesss?tab=packages` o abre tu fork y entra en
+   **Packages → hiss**.
+2. En **Package settings → Visibility** pulsa **Change visibility → Public**.
+3. Confirma. A partir de ese momento `docker pull ghcr.io/vieitesss/hiss:edge`
+   funciona sin `docker login`, y también `docker compose pull` desde el runner.
+
+Verifica desde tu máquina sin autenticar:
+
+```sh
+docker logout ghcr.io 2>/dev/null || true
+docker pull ghcr.io/vieitesss/hiss:edge || docker pull ghcr.io/tu-usuario/hiss:edge
+```
+
+Si el paquete sigue privado, los jobs de despliegue fallarán con
+`unauthorized` en `docker pull`. Los `push` no se ven afectados porque usan
+`GITHUB_TOKEN` con `packages: write` dentro del workflow.
+
+> La visibilidad pública no expone `POSTGRES_PASSWORD`; solo expone las
+> capas de la imagen, que no contienen secretos.
+
 ### Rollback
 
 `rollback.yml` sólo se dispara con `workflow_dispatch` (no construye nada) —
@@ -133,6 +368,7 @@ gh run list --workflow rollback.yml --limit 5
 gh run view <run-id> --log-failed
 ```
 
-> TODO: la ceremonia completa de release, la checklist de promoción y el
-> runbook de rollback vivirán en `docs/release-process.md` (issue #7). Esta
-> sección es sólo un puntero de descubrimiento hasta que ese documento exista.
+> La ceremonia completa de release, la checklist de promoción y el
+> runbook de rollback viven en `docs/release-process.md`. La sección
+> anterior es el resumen operativo; el runbook es la referencia canónica.
+
