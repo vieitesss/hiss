@@ -1,20 +1,39 @@
 from flask import request, jsonify
+from sqlalchemy import func, case
 from sqlalchemy.exc import IntegrityError
 
 from . import api_bp
 from .errors import bad_request, conflict
 from ..extensions import db
-from ..models import Project
+from ..models import Project, Issue, IssueStatus
 
 
-def _project_to_dict(p: Project) -> dict:
-    return {"id": p.id, "key": p.key, "name": p.name}
+def _project_to_dict(p: Project, open_issues: int = 0) -> dict:
+    return {"id": p.id, "key": p.key, "name": p.name, "open_issues": open_issues}
 
 
 @api_bp.route("/projects", methods=["GET"])
 def list_projects():
-    projects = Project.query.order_by(Project.id).all()
-    return jsonify([_project_to_dict(p) for p in projects]), 200
+    # Single query with left outer join to count open issues (status != 'done') per project
+    rows = (
+        db.session.query(
+            Project,
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Issue.status != IssueStatus.done, 1),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("open_issues"),
+        )
+        .outerjoin(Issue, Issue.project_id == Project.id)
+        .group_by(Project.id)
+        .order_by(Project.id)
+        .all()
+    )
+    return jsonify([_project_to_dict(p, int(count)) for p, count in rows]), 200
 
 
 @api_bp.route("/projects", methods=["POST"])
@@ -45,4 +64,4 @@ def create_project():
         db.session.rollback()
         return conflict(f"project key '{key}' already exists")
 
-    return jsonify(_project_to_dict(project)), 201
+    return jsonify(_project_to_dict(project, 0)), 201

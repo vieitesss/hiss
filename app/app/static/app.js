@@ -207,7 +207,12 @@ function renderFilterSelect(id, label, options, value) {
   const optionsMarkup = options.map(option => `
     <option value="${escapeHtml(option.value)}" ${option.value === value ? 'selected' : ''}>${escapeHtml(option.label)}</option>
   `).join('');
-  return `<select class="form-select form-select-sm filter-select${selectedClass}" id="${id}" aria-label="${escapeHtml(label)}" onchange="app.handleFilterChange()">${optionsMarkup}</select>`;
+  return `
+    <div class="filter-field">
+      <label class="filter-field-label" for="${id}">${escapeHtml(label)}</label>
+      <select class="form-select form-select-sm filter-select${selectedClass}" id="${id}" aria-label="${escapeHtml(label)}" onchange="app.handleFilterChange()">${optionsMarkup}</select>
+    </div>
+  `;
 }
 
 // --- Routing ---------------------------------------------------------------
@@ -280,16 +285,18 @@ function renderProjectsList(projects) {
       </section>
     `;
   } else {
-    content += `<section class="project-grid" aria-label="Projects">`;
+    content += `<section class="project-list surface-card" aria-label="Projects">`;
     projects.forEach(project => {
+      const openCount = typeof project.open_issues === 'number' ? project.open_issues : 0;
       content += `
-        <a class="project-card" href="#/projects/${encodeURIComponent(project.key)}">
-          <div class="project-card-top">
-            <span class="project-key-badge">${escapeHtml(project.key)}</span>
-            <span class="project-id">#${escapeHtml(project.id)}</span>
+        <a class="project-list-row" href="#/projects/${encodeURIComponent(project.key)}">
+          <div class="project-list-main">
+            <span class="project-list-name">${escapeHtml(project.name)}</span>
+            <span class="project-list-key">${escapeHtml(project.key)}</span>
           </div>
-          <h2 class="project-card-name">${escapeHtml(project.name)}</h2>
-          <span class="project-card-link">View issues ${icon('arrowRight', 'icon icon-xs')}</span>
+          <div class="project-list-meta">
+            <span class="project-open-badge">${openCount} open</span>
+          </div>
         </a>
       `;
     });
@@ -387,6 +394,40 @@ function renderProjectIssuesView() {
   const hasFilters = Boolean(state.filters.status || state.filters.priority || state.filters.label);
   const projectInitials = String(project.key || project.name || '?').slice(0, 2).toUpperCase();
 
+  // Active filter pills
+  const activePills = [];
+  if (state.filters.status) {
+    const opt = statusOptions.find(o => o.value === state.filters.status);
+    const label = opt ? opt.label : state.filters.status;
+    activePills.push(`
+      <span class="filter-pill">
+        <span class="filter-pill-label">Status:</span>
+        <span class="filter-pill-value">${escapeHtml(label)}</span>
+        <button type="button" class="filter-pill-remove" aria-label="Remove status filter" onclick="app.clearSingleFilter('status', event)">&times;</button>
+      </span>
+    `);
+  }
+  if (state.filters.priority) {
+    const opt = priorityOptions.find(o => o.value === state.filters.priority);
+    const label = opt ? opt.label : state.filters.priority;
+    activePills.push(`
+      <span class="filter-pill">
+        <span class="filter-pill-label">Priority:</span>
+        <span class="filter-pill-value">${escapeHtml(label)}</span>
+        <button type="button" class="filter-pill-remove" aria-label="Remove priority filter" onclick="app.clearSingleFilter('priority', event)">&times;</button>
+      </span>
+    `);
+  }
+  if (state.filters.label) {
+    activePills.push(`
+      <span class="filter-pill">
+        <span class="filter-pill-label">Label:</span>
+        <span class="filter-pill-value">${escapeHtml(state.filters.label)}</span>
+        <button type="button" class="filter-pill-remove" aria-label="Remove label filter" onclick="app.clearSingleFilter('label', event)">&times;</button>
+      </span>
+    `);
+  }
+
   let content = `
     <div class="breadcrumb-row">
       <a href="#/projects">Projects</a>
@@ -412,18 +453,35 @@ function renderProjectIssuesView() {
       </button>
     </section>
 
-    <section class="issue-toolbar" aria-label="Issue filters">
-      <div class="toolbar-filters">
-        <span class="toolbar-label">${icon('filter', 'icon icon-sm')} Filter</span>
-        ${renderFilterSelect('filterStatus', 'Status', statusOptions, state.filters.status)}
-        ${renderFilterSelect('filterPriority', 'Priority', priorityOptions, state.filters.priority)}
-        ${renderFilterSelect('filterLabel', 'Label', labelOptions, state.filters.label)}
-        ${hasFilters ? `<button type="button" class="filter-clear" onclick="app.resetFilters()">${icon('x', 'icon icon-xs')} Clear</button>` : ''}
-      </div>
-      <div class="toolbar-summary">${issues.length} ${issues.length === 1 ? 'issue' : 'issues'}${hasFilters ? ' matching' : ''}</div>
-    </section>
-
     <section class="issues-surface" aria-label="Issues">
+      <div class="issues-table-control-bar">
+        <div class="table-control-left">
+          <div class="filter-pills-list">
+            ${activePills.join('')}
+            ${hasFilters ? `<button type="button" class="filter-clear-all-link" onclick="app.resetFilters()">Clear all</button>` : ''}
+          </div>
+        </div>
+        <div class="table-control-right">
+          <div class="dropdown filter-dropdown">
+            <button class="btn btn-sm filter-toggle-btn${hasFilters ? ' has-filters' : ''}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+              ${icon('filter', 'icon icon-xs me-1')} Filter
+            </button>
+            <div class="dropdown-menu dropdown-menu-end filter-popover p-3 shadow">
+              <div class="filter-popover-header mb-2 pb-1 border-bottom d-flex justify-content-between align-items-center">
+                <span class="fw-semibold small">Filter issues</span>
+                ${hasFilters ? `<button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small text-danger" onclick="app.resetFilters()">Clear all</button>` : ''}
+              </div>
+              <div class="filter-fields-stack">
+                ${renderFilterSelect('filterStatus', 'Status', statusOptions, state.filters.status)}
+                ${renderFilterSelect('filterPriority', 'Priority', priorityOptions, state.filters.priority)}
+                ${renderFilterSelect('filterLabel', 'Label', labelOptions, state.filters.label)}
+              </div>
+            </div>
+          </div>
+          <span class="table-count-summary">${issues.length} ${issues.length === 1 ? 'issue' : 'issues'}${hasFilters ? ' matching' : ''}</span>
+        </div>
+      </div>
+
       <div class="issue-table-header" role="row">
         <span>Issue</span>
         <span>Status</span>
@@ -845,6 +903,14 @@ function handleFilterChange() {
   fetchAndRenderIssues();
 }
 
+function clearSingleFilter(filterKey, event) {
+  if (event) event.stopPropagation();
+  if (filterKey in state.filters) {
+    state.filters[filterKey] = '';
+    fetchAndRenderIssues();
+  }
+}
+
 function resetFilters() {
   state.filters = { status: '', priority: '', label: '' };
   fetchAndRenderIssues();
@@ -916,5 +982,6 @@ window.app = {
   handleAttachSelectedLabel,
   handleDetachLabel,
   handleFilterChange,
+  clearSingleFilter,
   resetFilters
 };
