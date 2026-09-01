@@ -220,8 +220,8 @@ git checkout main -- .github/workflows/
 ## Notas para el profesor
 
 - No ejecutar workflows en clase — la inspección es estática. Si quieres
-  demo en vivo, empuja un commit vacío a `main` y observa `cd-dev.yml` en
-  **Actions**.
+  demo en vivo, empuja un commit vacío a `main` y observa primero `ci.yml`
+  y, solo si termina en verde, `cd-dev.yml` en **Actions**.
 - El tag `workflows-duplicated` se creó adrede para esta lección; no lo
   borres. Si se pierde, recrearlo desde `963d38e`.
 - Tiempo: si la clase es de 90 min, añade ejercicio práctico: el alumno

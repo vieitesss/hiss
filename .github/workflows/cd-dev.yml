@@ -1,9 +1,15 @@
 name: CD — dev
 
-# Safety invariant: this workflow deploys only owner-controlled pushes to main.
-# Never add pull_request: untrusted fork code must not execute on the self-hosted runner.
+# Safety invariant: deploy only after CI succeeds for an owner-controlled
+# push to main. Never add pull_request. The job-level filter on
+# workflow_run.event == push && head_branch == main is required so a green
+# pull_request CI run cannot start a deploy on the self-hosted runner.
 on:
-  push:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
     branches:
       - main
 
@@ -18,15 +24,24 @@ concurrency:
 jobs:
   prepare:
     name: Resolve dev image tag
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
+      sha: ${{ steps.tag.outputs.sha }}
       tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Set 8-character SHA tag
         id: tag
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
-        run: echo "tag=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "tag=${HEAD_SHA:0:8}" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build and push dev image
@@ -34,6 +49,7 @@ jobs:
     uses: ./.github/workflows/_build-push.yml
     with:
       tag: ${{ needs.prepare.outputs.tag }}
+      ref: ${{ needs.prepare.outputs.sha }}
     secrets: inherit
     permissions:
       contents: read
@@ -54,6 +70,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
       - name: Pull dev image
         shell: bash
         run: |

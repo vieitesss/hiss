@@ -18,7 +18,10 @@ El repo separa claramente verificación y entrega:
 - **CD** (`cd-dev.yml`, `cd-staging.yml`, `cd-prod.yml`, `rollback.yml`)
   construye la imagen una vez y la despliega en tu máquina vía runner
   `self-hosted`. El workflow reutilizable `_build-push.yml` centraliza el
-  `build` y `push`.
+  `build` y `push`. Ningún `cd-*.yml` despliega si CI no está en verde
+  para ese commit: `cd-dev.yml` se dispara con `workflow_run` cuando CI
+  termina con éxito en `main`; `cd-staging.yml` y `cd-prod.yml` empiezan
+  por un job `ci-gate`.
 
 Toda imagen se publica en `ghcr.io/vieitesss/hiss:<tag>` y se despliega con
 el mismo `deploy/compose.yml` cambiando solo `--env-file`. El tag de imagen
@@ -83,28 +86,30 @@ prepare (calcula tag) → build (reutilizable) → deploy (self-hosted) → smok
 
 | Disparador | Workflow | Tag de imagen | Environment | Puerto | Puerta |
 | --- | --- | --- | --- | --- | --- |
-| `push` a `main` | `cd-dev.yml` | `GITHUB_SHA` truncado a 8 caracteres | `dev` | `8001` | automático |
-| `push` de tag `X.Y.Z-snapshot` | `cd-staging.yml` | `X.Y.Z-snapshot` | `staging` | `8002` | automático |
-| `push` de tag `X.Y.Z` | `cd-prod.yml` | `X.Y.Z` | `prod` | `8003` | aprobación de Environment |
+| CI en verde tras `push` a `main` | `cd-dev.yml` | `head_sha` truncado a 8 caracteres | `dev` | `8001` | CI debe ser `success` |
+| `push` de tag `X.Y.Z-snapshot` | `cd-staging.yml` | `X.Y.Z-snapshot` | `staging` | `8002` | job `ci-gate` + automático |
+| `push` de tag `X.Y.Z` | `cd-prod.yml` | `X.Y.Z` | `prod` | `8003` | job `ci-gate` + aprobación de Environment |
 | `workflow_dispatch` | `rollback.yml` | tag elegido manualmente | `dev`/`staging`/`prod` | según Environment | aprobación si es `prod` |
 
 Los tags no llevan `v` inicial. `pull_request` nunca despliega — cada
 `cd-*.yml` y `rollback.yml` lo declara en su cabecera:
 
 ```yaml
-# Safety invariant: this workflow deploys only owner-controlled pushes to main.
-# Never add pull_request: untrusted fork code must not execute on the self-hosted runner.
+# Safety invariant: this workflow deploys only after CI succeeds for an
+# owner-controlled push to main. Never add pull_request.
 ```
 
 ### `_build-push.yml` — workflow reutilizable
 
-`.github/workflows/_build-push.yml` es `workflow_call` con un único input:
+`.github/workflows/_build-push.yml` es `workflow_call` con input `tag` y
+`ref` opcional (SHA a construir; por defecto `github.sha`):
 
 ```yaml
 on:
   workflow_call:
     inputs:
       tag: { description: Image tag to publish, required: true, type: string }
+      ref: { description: Git ref or SHA to check out, required: false, type: string, default: "" }
 permissions:
   contents: read
   packages: write
@@ -132,8 +137,8 @@ Así se eliminó la duplicación que existía en el tag `workflows-duplicated`
 
 Los tres comparten estructura. Ejemplo `cd-dev.yml`:
 
-- `prepare`: `runs-on: ubuntu-latest`, `echo \"tag=${GITHUB_SHA::8}\" >> $GITHUB_OUTPUT`.
-- `build`: reutilizable `_build-push.yml`.
+- `prepare` (solo si CI fue `success` en un `push` a `main`): `runs-on: ubuntu-latest`, tag = 8 primeros caracteres de `github.event.workflow_run.head_sha`.
+- `build`: reutilizable `_build-push.yml` con `ref` al mismo SHA.
 - `deploy`: `runs-on: [self-hosted]`, `environment: dev`, `env: DEPLOY_TAG` y
   `POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}`, pasos `checkout@v7`,
   `docker compose -f deploy/compose.yml --env-file deploy/dev.env -p hiss-dev pull` y `up -d` con
@@ -142,10 +147,16 @@ Los tres comparten estructura. Ejemplo `cd-dev.yml`:
   tres `curl --fail --silent --show-error --max-time 10 --retry 10 --retry-delay 2 --retry-connrefused`
   a `/healthz`, `/readyz` y `/version | jq --exit-status --arg expected \"$DEPLOY_TAG\" '.version == $expected'`.
 
-`cd-staging.yml` usa `on: push: tags: '[0-9]+.[0-9]+.[0-9]+-snapshot'` y
-`RELEASE_TAG: ${{ github.ref_name }}`; `BASE_URL=http://localhost:8002`.
-`cd-prod.yml` usa `'[0-9]+.[0-9]+.[0-9]+'` y `BASE_URL=http://localhost:8003`
-con `environment: prod` protegido por revisor.
+`cd-dev.yml` se dispara con `on: workflow_run` del workflow `CI`
+(`types: [completed]`). Los jobs de `prepare` exigen `conclusion == success`,
+`event == push` y `head_branch == main` para que un CI verde de un pull
+request no despliegue. `cd-staging.yml` usa `on: push: tags:
+'[0-9]+.[0-9]+.[0-9]+-snapshot'` y `RELEASE_TAG: ${{ github.ref_name }}`;
+`BASE_URL=http://localhost:8002`. `cd-prod.yml` usa `'[0-9]+.[0-9]+.[0-9]+'`
+y `BASE_URL=http://localhost:8003` con `environment: prod` protegido por
+revisor. Staging y prod empiezan por `ci-gate`, que consulta el CI de ese
+commit y no deja pasar `prepare` hasta `completed:success` (o falla si CI
+falló).
 
 ### `rollback.yml`
 
@@ -174,7 +185,8 @@ flowchart TD
     CHANGES --> TCLI["test-cli"]
     TAPP --> BUILD["build<br/>docker build -f app/Dockerfile app/"]
 
-    PUSHMAIN["push a main"] --> CDDEV["cd-dev.yml<br/>prepare SHA8 → _build-push.yml<br/>→ deploy dev:8001 → smoke-test"]
+    PUSHMAIN["push a main"] --> CIWAIT["ci.yml debe terminar en success"]
+    CIWAIT --> CDDEV["cd-dev.yml via workflow_run<br/>prepare SHA8 → _build-push.yml<br/>→ deploy dev:8001 → smoke-test"]
     TAGSNAP["push tag X.Y.Z-snapshot"] --> CDSTAG["cd-staging.yml<br/>prepare tag → _build-push.yml<br/>→ deploy staging:8002 → smoke-test"]
     TAGREL["push tag X.Y.Z"] --> CDPROD["cd-prod.yml<br/>prepare tag → _build-push.yml<br/>→ deploy prod:8003<br/>gate de aprobación → smoke-test"]
     WD["workflow_dispatch"] --> ROLLBACK["rollback.yml<br/>deploy Environment/tag elegido<br/>→ smoke-test"]
@@ -192,7 +204,7 @@ sequenceDiagram
     participant P as prod :8003
     participant R as Revisor
 
-    Note over D,P: push a main → dev despliega automáticamente — Deployment
+    Note over D,P: push a main + CI verde → dev despliega — Deployment
     D->>D: _build-push SHA8 + pull/up + smoke-test
 
     Note over D,P: push X.Y.Z-snapshot → staging automático — Deployment

@@ -10,14 +10,44 @@ on:
 permissions:
   contents: read
   packages: write
+  actions: read
 
 concurrency:
   group: cd-prod
   cancel-in-progress: false
 
 jobs:
+  ci-gate:
+    name: Require green CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Wait for CI success on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$GITHUB_SHA"
+          for _ in $(seq 1 60); do
+            row="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$sha" --limit 1 --json status,conclusion --jq '.[0] | "\(.status):\(.conclusion)"')"
+            case "$row" in
+              completed:success) exit 0 ;;
+              completed:failure|completed:cancelled|completed:timed_out|completed:startup_failure)
+                echo "CI $row" >&2
+                exit 1
+                ;;
+              *:*) echo "CI $row; waiting" ;;
+              *) echo "No CI run yet; waiting" ;;
+            esac
+            sleep 10
+          done
+          echo "Timed out waiting for CI on $sha" >&2
+          exit 1
+
   prepare:
     name: Resolve prod image tag
+    needs: ci-gate
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:

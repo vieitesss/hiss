@@ -17,7 +17,7 @@ etiqueta con el mismo nombre que el tag de git:
 
 | Origen | Tag de imagen / `APP_VERSION` | Workflow | Environment |
 | --- | --- | --- | --- |
-| `push` a `main` | `GITHUB_SHA` truncado a 8 caracteres (`SHA8`) | `cd-dev.yml` | `dev` `:8001` |
+| CI en verde tras `push` a `main` | SHA truncado a 8 caracteres (`SHA8`) | `cd-dev.yml` | `dev` `:8001` |
 | `push` de tag `X.Y.Z-snapshot` | `X.Y.Z-snapshot` | `cd-staging.yml` | `staging` `:8002` |
 | `push` de tag `X.Y.Z` | `X.Y.Z` | `cd-prod.yml` | `prod` `:8003` |
 

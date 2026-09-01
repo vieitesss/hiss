@@ -62,8 +62,10 @@ gh run list --workflow cd-prod.yml --limit 3
 gh run watch --exit-status
 curl --fail http://localhost:8003/version | jq .  # {"version":"0.2.0"}
 
-# 4. Verifica dev en :8001 (cada push a main despliega SHA8)
+# 4. Verifica dev en :8001 (CI verde en main dispara cd-dev.yml con SHA8)
 git commit --allow-empty -m "chore: quickstart check" && git push origin main
+gh run list --workflow ci.yml --limit 3
+gh run watch --exit-status   # espera a CI; CD no arranca si CI falla
 gh run list --workflow cd-dev.yml --limit 3
 gh run watch --exit-status
 curl --fail http://localhost:8001/version | jq .  # {"version":"<SHA8>"}

@@ -77,9 +77,9 @@ runners en macOS también funcionan.
 
 | Disparador | Workflow | Tag de imagen | Environment | Puerta |
 | --- | --- | --- | --- | --- |
-| `push` a `main` | `cd-dev.yml` | `GITHUB_SHA` de 8 caracteres | `dev` (`:8001`) | automático |
-| `push` de tag `X.Y.Z-snapshot` | `cd-staging.yml` | `X.Y.Z-snapshot` | `staging` (`:8002`) | automático |
-| `push` de tag `X.Y.Z` | `cd-prod.yml` | `X.Y.Z` | `prod` (`:8003`) | aprobación del Environment |
+| CI en verde tras `push` a `main` | `cd-dev.yml` | SHA de 8 caracteres | `dev` (`:8001`) | CI debe ser `success` |
+| `push` de tag `X.Y.Z-snapshot` | `cd-staging.yml` | `X.Y.Z-snapshot` | `staging` (`:8002`) | `ci-gate` + automático |
+| `push` de tag `X.Y.Z` | `cd-prod.yml` | `X.Y.Z` | `prod` (`:8003`) | `ci-gate` + aprobación del Environment |
 
 Los tags no deben llevar una `v` inicial y `pull_request` nunca despliega —
 cada workflow de despliegue comenta este invariante de seguridad en su
@@ -316,10 +316,11 @@ gh secret list --env prod | grep POSTGRES_PASSWORD
 
 ### Probar que el secreto llega al runner
 
-Haz un `push` a `main` y observa `cd-dev.yml` en **Actions**; el job
-`Deploy dev` debe mostrar `environment: dev` y no fallar por
-`POSTGRES_PASSWORD must be set`. Si falla, revisa que el secreto existe en
-`dev` y que el runner está `Idle`.
+Haz un `push` a `main` y espera a que `ci.yml` termine en verde. Entonces
+arranca `cd-dev.yml`; el job `Deploy dev` debe mostrar `environment: dev` y
+no fallar por `POSTGRES_PASSWORD must be set`. Si CI falla, CD no llega a
+desplegar. Si CD falla por el secreto, revisa que existe en `dev` y que el
+runner está `Idle`.
 
 ## Paquete GHCR en público
 
