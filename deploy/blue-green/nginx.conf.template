@@ -1,0 +1,41 @@
+# Hiss — nginx reverse proxy template for blue-green demo
+# Rendered at container start and on each switch via:
+#   envsubst with ACTIVE_SLOT < nginx.conf.template > default.conf && nginx -s reload
+# Only ACTIVE_SLOT is substituted (explicit envsubst). All nginx variables ($host, $remote_addr, etc.)
+# are preserved because envsubst is called with explicit var list.
+# After rendering, proxy_pass becomes http://<active>:8000 (literal blue or green),
+# so no nginx resolver is needed — reload re-resolves Docker DNS.
+
+server {
+    listen 80;
+    server_name localhost;
+
+    # Security headers (teaching demo — minimal set)
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Proxy timeouts and buffering
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 10s;
+    proxy_read_timeout 10s;
+    proxy_buffering off;
+    proxy_http_version 1.1;
+
+    # Main app — all paths go to the active slot (blue or green)
+    location / {
+        proxy_pass http://${ACTIVE_SLOT}:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Passive health: retry on error to next upstream (if upstream group used)
+        proxy_next_upstream error timeout http_502 http_503;
+        proxy_next_upstream_timeout 5s;
+    }
+
+    # Optional: expose nginx health for compose healthcheck (proxied as well)
+    # If the active slot is down, this will 502 — compose healthcheck will retry.
+}
