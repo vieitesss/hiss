@@ -429,6 +429,7 @@ a:hover {
 /* Project index list */
 .projects-container {
   max-width: 760px;
+  margin-inline: auto;
 }
 
 .project-list {
