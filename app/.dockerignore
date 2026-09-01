@@ -1,0 +1,52 @@
+# Hiss — Docker build context ignore (build context is app/)
+# Keep image minimal and hadolint/build clean. Mirrors .gitignore + teaching extras.
+
+# VCS
+.git
+.gitignore
+
+# Python caches / bytecode
+__pycache__
+**/__pycache__
+**/__pycache__/**
+*.pyc
+**/*.pyc
+*.pyo
+**/*.pyo
+*.pyd
+.pytest_cache
+**/.pytest_cache
+**/.pytest_cache/**
+
+# Virtual envs
+.venv
+venv
+.env
+.env.*
+
+# Tests — not needed in production image
+tests
+**/tests
+**/tests/**
+test_*.py
+**/test_*.py
+*_test.py
+
+# Docs (teaching material source)
+docs
+*.md
+!README.md
+
+# Local tooling / CI artefacts
+.pi-subagent-runs
+**/.pi-subagent-runs
+**/.pi-subagent-runs/**
+.pytest_cache
+**/*.egg-info
+*.egg-info
+Dockerfile
+.dockerignore
+
+# OS noise
+.DS_Store
+Thumbs.db

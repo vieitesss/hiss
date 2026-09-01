@@ -1,0 +1,25 @@
+# Hiss — root Docker ignore for root-context Docker builds.
+# The canonical app image build uses app/.dockerignore and the app/ context:
+#   docker build -f app/Dockerfile app/
+# Keep this file for any future Dockerfile that intentionally uses the repository root as context.
+
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.venv
+venv
+.env
+.env.*
+app/tests
+app/__pycache__
+app/.pytest_cache
+tests
+docs
+.pi-subagent-runs
+*.egg-info
+.DS_Store
+Thumbs.db
